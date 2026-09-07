@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\UserRole;
+use App\Models\Business;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -40,6 +42,17 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Attach the user to a business with the given role.
+     */
+    public function forBusiness(?Business $business = null, UserRole $role = UserRole::Buyer): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'business_id' => $business?->id ?? Business::factory(),
+            'role' => $role,
         ]);
     }
 }

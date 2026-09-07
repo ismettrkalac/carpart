@@ -2,7 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Models\Business;
 use App\Models\BusinessPartPrice;
+use App\Models\Part;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,7 +20,9 @@ class BusinessPartPriceFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'business_id' => Business::factory(),
+            'part_id' => Part::factory(),
+            'price_cents' => $this->faker->numberBetween(500, 50000),
         ];
     }
 }
