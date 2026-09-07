@@ -38,6 +38,51 @@
                     @endif
                 </div>
 
+                @if ($part->isInStock())
+                    <form
+                        method="POST"
+                        action="{{ route('cart.items.store', $part) }}"
+                        class="mt-6"
+                        x-data="{ quantity: {{ (int) old('quantity', 1) }}, max: {{ $part->stock_quantity }}, adding: false }"
+                        x-on:submit="adding = true"
+                    >
+                        @csrf
+                        <label for="quantity" class="block text-sm font-medium">Quantity</label>
+                        <div class="mt-1 flex items-center gap-2">
+                            <button
+                                type="button"
+                                x-on:click="quantity = Math.max(1, quantity - 1)"
+                                class="flex size-9 items-center justify-center rounded-md border border-neutral-300 text-lg dark:border-neutral-700"
+                                aria-label="Decrease quantity"
+                            >−</button>
+                            <input
+                                type="number"
+                                id="quantity"
+                                name="quantity"
+                                x-model.number="quantity"
+                                min="1"
+                                :max="max"
+                                class="w-16 rounded-md border border-neutral-300 px-2 py-1.5 text-center dark:border-neutral-700 dark:bg-neutral-900"
+                            >
+                            <button
+                                type="button"
+                                x-on:click="quantity = Math.min(max, quantity + 1)"
+                                class="flex size-9 items-center justify-center rounded-md border border-neutral-300 text-lg dark:border-neutral-700"
+                                aria-label="Increase quantity"
+                            >+</button>
+                        </div>
+
+                        <button
+                            type="submit"
+                            :disabled="adding"
+                            class="mt-4 w-full rounded-md bg-neutral-900 py-2.5 text-sm font-medium text-white disabled:opacity-60 dark:bg-white dark:text-neutral-900 sm:w-auto sm:px-8"
+                        >
+                            <span x-show="!adding">Add to cart</span>
+                            <span x-show="adding" x-cloak>Adding…</span>
+                        </button>
+                    </form>
+                @endif
+
                 <p class="mt-6 leading-relaxed text-neutral-600 dark:text-neutral-400">
                     {{ $part->description }}
                 </p>
