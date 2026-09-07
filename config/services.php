@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'vpic' => [
+        'base_url' => env('VPIC_BASE_URL', 'https://vpic.nhtsa.dot.gov/api'),
+        'timeout' => env('VPIC_TIMEOUT', 5),
+        'cache_ttl' => env('VPIC_CACHE_TTL', 60 * 60 * 24),
+    ],
+
 ];

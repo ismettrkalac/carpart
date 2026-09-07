@@ -17,8 +17,12 @@ class ManufacturerFactory extends Factory
      */
     public function definition(): array
     {
+        $name = $this->faker->unique()->company();
+
         return [
-            //
+            'name' => $name,
+            'slug' => str($name)->slug(),
+            'logo_path' => null,
         ];
     }
 }

@@ -17,8 +17,15 @@ class SupplierFactory extends Factory
      */
     public function definition(): array
     {
+        $name = $this->faker->unique()->company();
+
         return [
-            //
+            'name' => $name,
+            'slug' => str($name)->slug(),
+            'api_driver' => null,
+            'api_config' => null,
+            'is_active' => true,
+            'last_synced_at' => null,
         ];
     }
 }

@@ -17,8 +17,13 @@ class PriceTierFactory extends Factory
      */
     public function definition(): array
     {
+        $name = $this->faker->unique()->randomElement(['Retail', 'Wholesale', 'Distributor', 'Fleet']);
+
         return [
-            //
+            'name' => $name,
+            'slug' => str($name)->slug(),
+            'discount_percent' => $this->faker->numberBetween(0, 30),
+            'is_default' => false,
         ];
     }
 }
