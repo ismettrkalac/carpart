@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Services\Orders;
+
+use App\Models\Order;
+use App\Services\Cart\CartItem;
+use App\Services\Checkout\Address;
+use App\Services\Checkout\CheckoutTotals;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Creates orders and their line items. Every order is created
+ * pending_payment/unfulfilled — this class has no knowledge of any
+ * payment provider.
+ *
+ * FUTURE PAYMENT INTEGRATION — where it connects:
+ * - After create() returns, a payment service would use the returned
+ *   Order's total_cents/currency to start a provider checkout session or
+ *   payment intent, storing its reference on the order (a later migration
+ *   would add e.g. `payment_provider` + `payment_reference` columns).
+ * - A verified, signature-checked webhook handler — idempotent on the
+ *   provider's own event ID, separate from the idempotency key here —
+ *   would transition Order::payment_status to Paid/Failed and, only once
+ *   Paid, perform the real stock decrement that CartService and
+ *   StockChecker deliberately don't do today.
+ * - Order/OrderItem's snapshot fields (sku/name/unit_price_cents) are
+ *   exactly what that future payment/receipt step will need, and already
+ *   exist here.
+ */
+class OrderService
+{
+    /**
+     * @param  Collection<int, CartItem>  $cartItems  must already be
+     *                                                revalidated by the
+     *                                                caller (no item
+     *                                                needsAttention())
+     */
+    public function create(
+        Collection $cartItems,
+        CheckoutTotals $totals,
+        string $email,
+        Address $shipping,
+        Address $billing,
+        ?int $userId,
+        string $idempotencyKey,
+    ): Order {
+        $existing = Order::where('idempotency_key', $idempotencyKey)->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        try {
+            return DB::transaction(function () use ($cartItems, $totals, $email, $shipping, $billing, $userId, $idempotencyKey): Order {
+                $order = Order::create([
+                    'user_id' => $userId,
+                    'email' => $email,
+                    ...$shipping->toAttributes('shipping'),
+                    ...$billing->toAttributes('billing'),
+                    'subtotal_cents' => $totals->subtotalCents,
+                    'shipping_cents' => $totals->shippingCents,
+                    'tax_cents' => $totals->taxCents,
+                    'total_cents' => $totals->totalCents,
+                    'currency' => $totals->currency,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+
+                foreach ($cartItems as $item) {
+                    if ($item->part === null || $item->needsAttention()) {
+                        // The caller (CheckoutController) is responsible for
+                        // blocking submission when any line needs attention;
+                        // this is just a last-resort safety net.
+                        continue;
+                    }
+
+                    $order->items()->create([
+                        'part_id' => $item->part->id,
+                        'sku' => $item->part->sku,
+                        'name' => $item->part->name,
+                        'unit_price_cents' => $item->unitPriceCents,
+                        'quantity' => $item->quantity,
+                        'line_total_cents' => $item->lineTotalCents,
+                    ]);
+                }
+
+                return $order;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // A concurrent duplicate request won the race and created the
+            // order for this key first — return that one instead of failing.
+            return Order::where('idempotency_key', $idempotencyKey)->firstOrFail();
+        }
+    }
+}

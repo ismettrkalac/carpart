@@ -24,6 +24,12 @@
                         <a href="{{ route('home') }}" class="hover:text-neutral-500 {{ request()->routeIs('home') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Home</a>
                         <a href="{{ route('parts.index') }}" class="hover:text-neutral-500 {{ request()->routeIs('parts.*') || request()->routeIs('categories.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Shop Parts</a>
                         <a href="{{ route('vin-lookup.show') }}" class="hover:text-neutral-500 {{ request()->routeIs('vin-lookup.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">VIN Lookup</a>
+                        <a href="{{ route('cart.index') }}" class="flex items-center gap-1.5 hover:text-neutral-500 {{ request()->routeIs('cart.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">
+                            Cart
+                            @if ($cartCount > 0)
+                                <span class="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900">{{ $cartCount }}</span>
+                            @endif
+                        </a>
                     </nav>
 
                     <button
@@ -43,10 +49,33 @@
                     <a href="{{ route('home') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Home</a>
                     <a href="{{ route('parts.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Shop Parts</a>
                     <a href="{{ route('vin-lookup.show') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">VIN Lookup</a>
+                    <a href="{{ route('cart.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">
+                        Cart{{ $cartCount > 0 ? " ({$cartCount})" : '' }}
+                    </a>
                 </nav>
             </header>
 
             <main class="flex-1">
+                @if (session('status'))
+                    <div class="mx-auto mt-6 max-w-7xl px-6">
+                        <div class="rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
+                            {{ session('status') }}
+                        </div>
+                    </div>
+                @endif
+
+                @if ($errors->any())
+                    <div class="mx-auto mt-6 max-w-7xl px-6">
+                        <div class="rounded-md bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-300">
+                            <ul class="list-inside list-disc space-y-1">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    </div>
+                @endif
+
                 {{ $slot }}
             </main>
 
