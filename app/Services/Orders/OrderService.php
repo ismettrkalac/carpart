@@ -15,21 +15,13 @@ use Illuminate\Support\Facades\DB;
 /**
  * Creates orders and their line items. Every order is created
  * pending_payment/unfulfilled — this class has no knowledge of any
- * payment provider.
+ * payment provider; that lives in App\Services\Payments\PayseraCheckoutService,
+ * which uses this order's total_cents/currency/uuid to start a Paysera
+ * Checkout session after create() returns.
  *
- * FUTURE PAYMENT INTEGRATION — where it connects:
- * - After create() returns, a payment service would use the returned
- *   Order's total_cents/currency to start a provider checkout session or
- *   payment intent, storing its reference on the order (a later migration
- *   would add e.g. `payment_provider` + `payment_reference` columns).
- * - A verified, signature-checked webhook handler — idempotent on the
- *   provider's own event ID, separate from the idempotency key here —
- *   would transition Order::payment_status to Paid/Failed and, only once
- *   Paid, perform the real stock decrement that CartService and
- *   StockChecker deliberately don't do today.
- * - Order/OrderItem's snapshot fields (sku/name/unit_price_cents) are
- *   exactly what that future payment/receipt step will need, and already
- *   exist here.
+ * Order/OrderItem's snapshot fields (sku/name/unit_price_cents) are what
+ * that payment/receipt step (and the stock decrement in
+ * App\Services\Inventory\StockDeductionService, once paid) rely on.
  */
 class OrderService
 {

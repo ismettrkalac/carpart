@@ -103,6 +103,91 @@ class CheckoutTest extends TestCase
         $this->assertSame($user->id, Order::first()->user_id);
     }
 
+    public function test_a_guest_sees_an_empty_checkout_form(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->get(route('checkout.create'));
+
+        $this->assertSame([], $response->viewData('prefill'));
+    }
+
+    public function test_a_first_time_logged_in_customer_gets_only_their_email_prefilled(): void
+    {
+        $user = User::factory()->create(['email' => 'returning@example.com']);
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->actingAs($user)->get(route('checkout.create'));
+
+        $this->assertSame(['email' => 'returning@example.com'], $response->viewData('prefill'));
+    }
+
+    public function test_a_returning_customer_gets_their_last_orders_address_prefilled(): void
+    {
+        $user = User::factory()->create(['email' => 'returning@example.com']);
+        Order::factory()->create([
+            'user_id' => $user->id,
+            'shipping_name' => 'Jane Mechanic',
+            'shipping_line1' => '123 Garage Row',
+            'shipping_line2' => null,
+            'shipping_city' => 'Springfield',
+            'shipping_state' => 'IL',
+            'shipping_postal_code' => '62704',
+            'shipping_country' => 'US',
+            'billing_name' => 'Jane Mechanic',
+            'billing_line1' => '123 Garage Row',
+            'billing_line2' => null,
+            'billing_city' => 'Springfield',
+            'billing_state' => 'IL',
+            'billing_postal_code' => '62704',
+            'billing_country' => 'US',
+        ]);
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->actingAs($user)->get(route('checkout.create'));
+
+        $prefill = $response->viewData('prefill');
+        $this->assertSame('returning@example.com', $prefill['email']);
+        $this->assertSame('Jane Mechanic', $prefill['shipping_name']);
+        $this->assertSame('123 Garage Row', $prefill['shipping_line1']);
+        $this->assertSame('Springfield', $prefill['shipping_city']);
+        $this->assertFalse($prefill['billing_different']);
+        $this->assertArrayNotHasKey('billing_name', $prefill);
+    }
+
+    public function test_a_returning_customer_with_a_different_billing_address_gets_it_prefilled_too(): void
+    {
+        $user = User::factory()->create();
+        Order::factory()->create([
+            'user_id' => $user->id,
+            'billing_name' => 'Jane Mechanic LLC',
+        ]);
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->actingAs($user)->get(route('checkout.create'));
+
+        $prefill = $response->viewData('prefill');
+        $this->assertTrue($prefill['billing_different']);
+        $this->assertSame('Jane Mechanic LLC', $prefill['billing_name']);
+    }
+
+    public function test_prefilled_fields_appear_in_the_rendered_form(): void
+    {
+        $user = User::factory()->create(['email' => 'returning@example.com']);
+        Order::factory()->create(['user_id' => $user->id, 'shipping_name' => 'Jane Mechanic']);
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->actingAs($user)->get(route('checkout.create'));
+
+        $response->assertSee('returning@example.com', false);
+        $response->assertSee('Jane Mechanic', false);
+    }
+
     public function test_billing_address_defaults_to_shipping_when_not_marked_different(): void
     {
         $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);

@@ -17,7 +17,7 @@
             method="POST"
             action="{{ route('checkout.store') }}"
             class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]"
-            x-data="{ billingDifferent: {{ old('billing_different') ? 'true' : 'false' }}, submitting: false }"
+            x-data="{ billingDifferent: {{ old('billing_different', $prefill['billing_different'] ?? false) ? 'true' : 'false' }}, submitting: false }"
             x-on:submit="submitting = true"
         >
             @csrf
@@ -28,7 +28,7 @@
                     <h2 class="font-semibold">Contact</h2>
                     <div class="mt-3">
                         <label for="email" class="block text-sm font-medium">Email</label>
-                        <input type="email" id="email" name="email" value="{{ old('email') }}" required
+                        <input type="email" id="email" name="email" value="{{ old('email', $prefill['email'] ?? '') }}" required
                             class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                         @error('email')
                             <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
@@ -41,42 +41,42 @@
                     <div class="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div class="sm:col-span-2">
                             <label for="shipping_name" class="block text-sm font-medium">Full name</label>
-                            <input type="text" id="shipping_name" name="shipping_name" value="{{ old('shipping_name') }}" required
+                            <input type="text" id="shipping_name" name="shipping_name" value="{{ old('shipping_name', $prefill['shipping_name'] ?? '') }}" required
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('shipping_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label for="shipping_line1" class="block text-sm font-medium">Address</label>
-                            <input type="text" id="shipping_line1" name="shipping_line1" value="{{ old('shipping_line1') }}" required
+                            <input type="text" id="shipping_line1" name="shipping_line1" value="{{ old('shipping_line1', $prefill['shipping_line1'] ?? '') }}" required
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('shipping_line1')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label for="shipping_line2" class="block text-sm font-medium">Apartment, suite, etc. (optional)</label>
-                            <input type="text" id="shipping_line2" name="shipping_line2" value="{{ old('shipping_line2') }}"
+                            <input type="text" id="shipping_line2" name="shipping_line2" value="{{ old('shipping_line2', $prefill['shipping_line2'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                         </div>
                         <div>
                             <label for="shipping_city" class="block text-sm font-medium">City</label>
-                            <input type="text" id="shipping_city" name="shipping_city" value="{{ old('shipping_city') }}" required
+                            <input type="text" id="shipping_city" name="shipping_city" value="{{ old('shipping_city', $prefill['shipping_city'] ?? '') }}" required
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('shipping_city')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div>
                             <label for="shipping_state" class="block text-sm font-medium">State / Province</label>
-                            <input type="text" id="shipping_state" name="shipping_state" value="{{ old('shipping_state') }}" required
+                            <input type="text" id="shipping_state" name="shipping_state" value="{{ old('shipping_state', $prefill['shipping_state'] ?? '') }}" required
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('shipping_state')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div>
                             <label for="shipping_postal_code" class="block text-sm font-medium">Postal code</label>
-                            <input type="text" id="shipping_postal_code" name="shipping_postal_code" value="{{ old('shipping_postal_code') }}" required
+                            <input type="text" id="shipping_postal_code" name="shipping_postal_code" value="{{ old('shipping_postal_code', $prefill['shipping_postal_code'] ?? '') }}" required
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('shipping_postal_code')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div>
                             <label for="shipping_country" class="block text-sm font-medium">Country</label>
-                            <input type="text" id="shipping_country" name="shipping_country" value="{{ old('shipping_country') }}" required
+                            <input type="text" id="shipping_country" name="shipping_country" value="{{ old('shipping_country', $prefill['shipping_country'] ?? '') }}" required
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('shipping_country')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
@@ -92,42 +92,42 @@
                     <div x-show="billingDifferent" x-cloak class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div class="sm:col-span-2">
                             <label for="billing_name" class="block text-sm font-medium">Full name</label>
-                            <input type="text" id="billing_name" name="billing_name" value="{{ old('billing_name') }}"
+                            <input type="text" id="billing_name" name="billing_name" value="{{ old('billing_name', $prefill['billing_name'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('billing_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label for="billing_line1" class="block text-sm font-medium">Address</label>
-                            <input type="text" id="billing_line1" name="billing_line1" value="{{ old('billing_line1') }}"
+                            <input type="text" id="billing_line1" name="billing_line1" value="{{ old('billing_line1', $prefill['billing_line1'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('billing_line1')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label for="billing_line2" class="block text-sm font-medium">Apartment, suite, etc. (optional)</label>
-                            <input type="text" id="billing_line2" name="billing_line2" value="{{ old('billing_line2') }}"
+                            <input type="text" id="billing_line2" name="billing_line2" value="{{ old('billing_line2', $prefill['billing_line2'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                         </div>
                         <div>
                             <label for="billing_city" class="block text-sm font-medium">City</label>
-                            <input type="text" id="billing_city" name="billing_city" value="{{ old('billing_city') }}"
+                            <input type="text" id="billing_city" name="billing_city" value="{{ old('billing_city', $prefill['billing_city'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('billing_city')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div>
                             <label for="billing_state" class="block text-sm font-medium">State / Province</label>
-                            <input type="text" id="billing_state" name="billing_state" value="{{ old('billing_state') }}"
+                            <input type="text" id="billing_state" name="billing_state" value="{{ old('billing_state', $prefill['billing_state'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('billing_state')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div>
                             <label for="billing_postal_code" class="block text-sm font-medium">Postal code</label>
-                            <input type="text" id="billing_postal_code" name="billing_postal_code" value="{{ old('billing_postal_code') }}"
+                            <input type="text" id="billing_postal_code" name="billing_postal_code" value="{{ old('billing_postal_code', $prefill['billing_postal_code'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('billing_postal_code')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                         <div>
                             <label for="billing_country" class="block text-sm font-medium">Country</label>
-                            <input type="text" id="billing_country" name="billing_country" value="{{ old('billing_country') }}"
+                            <input type="text" id="billing_country" name="billing_country" value="{{ old('billing_country', $prefill['billing_country'] ?? '') }}"
                                 class="mt-1 block w-full rounded-md border border-neutral-300 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                             @error('billing_country')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
@@ -178,7 +178,7 @@
                 </button>
 
                 <p class="text-xs text-neutral-500">
-                    Payment is not collected yet in this version — your order will be saved as pending payment.
+                    Your order is placed as pending payment; you may be redirected to complete payment next.
                 </p>
             </div>
         </form>

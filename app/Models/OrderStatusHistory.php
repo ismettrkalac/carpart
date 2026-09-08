@@ -13,7 +13,9 @@ use MoonShine\Laravel\Models\MoonshineUser;
 
 /**
  * An immutable, append-only log entry: never updated after creation, only
- * ever created by App\Services\Orders\OrderFulfillmentService.
+ * ever created by App\Services\Orders\OrderFulfillmentService (fulfillment
+ * entries) or App\Services\Payments\PayseraCheckoutService (payment
+ * entries).
  */
 #[Fillable(['order_id', 'status_type', 'from_status', 'to_status', 'actor_type', 'actor_id', 'note'])]
 class OrderStatusHistory extends Model

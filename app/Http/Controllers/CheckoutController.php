@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentStatus;
 use App\Http\Requests\CheckoutRequest;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\Cart\CartService;
 use App\Services\Checkout\CheckoutCalculator;
 use App\Services\Checkout\CheckoutSnapshot;
 use App\Services\Orders\OrderService;
+use App\Services\Payments\PayseraCheckoutService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +35,7 @@ class CheckoutController extends Controller
         private readonly CartService $cart,
         private readonly CheckoutCalculator $calculator,
         private readonly OrderService $orders,
+        private readonly PayseraCheckoutService $paysera,
     ) {}
 
     public function create(Request $request): View|RedirectResponse
@@ -57,6 +61,7 @@ class CheckoutController extends Controller
             'totals' => $totals,
             'checkoutToken' => $token,
             'changes' => [],
+            'prefill' => $this->prefillFor($request->user()),
         ]);
     }
 
@@ -72,7 +77,7 @@ class CheckoutController extends Controller
         // creating a second order or bouncing them to an "empty cart" page.
         $existingOrder = Order::where('idempotency_key', $token)->first();
         if ($existingOrder !== null) {
-            return redirect()->route('orders.show', $existingOrder);
+            return $this->redirectToPaymentOrReceipt($existingOrder);
         }
 
         $items = $this->cart->items();
@@ -102,6 +107,7 @@ class CheckoutController extends Controller
                 'totals' => $totals,
                 'checkoutToken' => $newToken,
                 'changes' => $changes !== [] ? $changes : ['Some items in your cart need attention — please review below.'],
+                'prefill' => $this->prefillFor($request->user()),
             ]);
         }
 
@@ -118,7 +124,68 @@ class CheckoutController extends Controller
         $this->cart->clear();
         $this->forgetSnapshot($request, $token);
 
+        return $this->redirectToPaymentOrReceipt($order);
+    }
+
+    /**
+     * Sends the customer to pay via Paysera Checkout when it's
+     * configured, or straight to the receipt page's pre-payment banner
+     * when it isn't (e.g. this environment has no Paysera credentials
+     * set yet) — see PayseraCheckoutService::isConfigured().
+     */
+    private function redirectToPaymentOrReceipt(Order $order): RedirectResponse
+    {
+        if ($order->payment_status === PaymentStatus::PendingPayment && $this->paysera->isConfigured()) {
+            return redirect()->away($this->paysera->createSession($order));
+        }
+
         return redirect()->route('orders.show', $order);
+    }
+
+    /**
+     * A signed-in customer shouldn't have to retype their email/address on
+     * every order — pre-fill the form from their account email and their
+     * most recent order's shipping/billing address. Guests, and
+     * first-time customers with no prior order, get an empty form as
+     * before. `old()` in the view always takes priority over this, so
+     * validation-error repopulation is unaffected.
+     *
+     * @return array<string, mixed>
+     */
+    private function prefillFor(?User $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        $prefill = ['email' => $user->email];
+
+        $lastOrder = Order::where('user_id', $user->id)->latest()->first();
+        if ($lastOrder === null) {
+            return $prefill;
+        }
+
+        foreach (['name', 'line1', 'line2', 'city', 'state', 'postal_code', 'country'] as $field) {
+            $prefill["shipping_{$field}"] = $lastOrder->{"shipping_{$field}"};
+        }
+
+        $billingDifferent = $lastOrder->billing_name !== $lastOrder->shipping_name
+            || $lastOrder->billing_line1 !== $lastOrder->shipping_line1
+            || $lastOrder->billing_line2 !== $lastOrder->shipping_line2
+            || $lastOrder->billing_city !== $lastOrder->shipping_city
+            || $lastOrder->billing_state !== $lastOrder->shipping_state
+            || $lastOrder->billing_postal_code !== $lastOrder->shipping_postal_code
+            || $lastOrder->billing_country !== $lastOrder->shipping_country;
+
+        $prefill['billing_different'] = $billingDifferent;
+
+        if ($billingDifferent) {
+            foreach (['name', 'line1', 'line2', 'city', 'state', 'postal_code', 'country'] as $field) {
+                $prefill["billing_{$field}"] = $lastOrder->{"billing_{$field}"};
+            }
+        }
+
+        return $prefill;
     }
 
     private function storeSnapshot(Request $request, CheckoutSnapshot $snapshot): void

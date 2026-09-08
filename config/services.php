@@ -41,4 +41,13 @@ return [
         'cache_ttl' => env('VPIC_CACHE_TTL', 60 * 60 * 24),
     ],
 
+    // OAuth2 client credentials from your project's Integrations page at
+    // https://developers.paysera.com. Left blank, checkout falls back to
+    // the pre-payment "order received" receipt — see
+    // App\Services\Payments\PayseraCheckoutService::isConfigured().
+    'paysera' => [
+        'client_id' => env('PAYSERA_CLIENT_ID'),
+        'client_secret' => env('PAYSERA_CLIENT_SECRET'),
+    ],
+
 ];

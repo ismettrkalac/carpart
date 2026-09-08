@@ -12,7 +12,11 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="flex min-h-screen flex-col bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
-        <div x-data="{ mobileMenuOpen: false }" class="contents">
+        <div
+            x-data="{ mobileMenuOpen: false, cartCount: {{ $cartCount }} }"
+            x-on:cart-line-updated.window="cartCount = $event.detail.cartCount ?? cartCount"
+            class="contents"
+        >
             <header class="border-b border-neutral-200 dark:border-neutral-800">
                 <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
                     <a href="{{ route('home') }}" class="flex items-center gap-2 text-lg font-semibold">
@@ -26,9 +30,7 @@
                         <a href="{{ route('vin-lookup.show') }}" class="hover:text-neutral-500 {{ request()->routeIs('vin-lookup.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">VIN Lookup</a>
                         <a href="{{ route('cart.index') }}" class="flex items-center gap-1.5 hover:text-neutral-500 {{ request()->routeIs('cart.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">
                             Cart
-                            @if ($cartCount > 0)
-                                <span class="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900">{{ $cartCount }}</span>
-                            @endif
+                            <span x-show="cartCount > 0" x-cloak x-text="cartCount" class="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900"></span>
                         </a>
                         @auth
                             <a href="{{ route('account.orders.index') }}" class="hover:text-neutral-500 {{ request()->routeIs('account.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Your Orders</a>
@@ -59,7 +61,7 @@
                     <a href="{{ route('parts.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Shop Parts</a>
                     <a href="{{ route('vin-lookup.show') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">VIN Lookup</a>
                     <a href="{{ route('cart.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">
-                        Cart{{ $cartCount > 0 ? " ({$cartCount})" : '' }}
+                        Cart<template x-if="cartCount > 0"><span x-text="' (' + cartCount + ')'"></span></template>
                     </a>
                     @auth
                         <a href="{{ route('account.orders.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Your Orders</a>
