@@ -25,6 +25,10 @@ use Illuminate\Support\Str;
     'billing_name', 'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_postal_code', 'billing_country',
     'subtotal_cents', 'shipping_cents', 'tax_cents', 'total_cents', 'currency',
     'idempotency_key',
+    // Deliberately NOT fillable: payment_status, fulfillment_status. Those
+    // only ever change through App\Services\Orders\OrderFulfillmentService,
+    // never via mass assignment/a raw form save.
+    'carrier', 'tracking_number', 'tracking_url',
 ])]
 class Order extends Model
 {
@@ -78,9 +82,36 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    /**
+     * @return HasMany<OrderStatusHistory, $this>
+     */
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(OrderStatusHistory::class)->latest();
+    }
+
+    /**
+     * Internal, staff-only — never expose on a customer-facing page.
+     *
+     * @return HasMany<OrderNote, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(OrderNote::class)->latest();
+    }
+
     public function isGuestOrder(): bool
     {
         return $this->user_id === null;
+    }
+
+    /**
+     * A short, human-friendly order reference. Not a database column —
+     * the UUID itself remains the actual access token/identifier.
+     */
+    public function orderNumber(): string
+    {
+        return strtoupper(substr($this->uuid, 0, 8));
     }
 
     public function formattedTotal(): string

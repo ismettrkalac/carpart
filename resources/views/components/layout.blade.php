@@ -30,6 +30,15 @@
                                 <span class="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900">{{ $cartCount }}</span>
                             @endif
                         </a>
+                        @auth
+                            <a href="{{ route('account.orders.index') }}" class="hover:text-neutral-500 {{ request()->routeIs('account.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Your Orders</a>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="text-neutral-600 hover:text-neutral-500 dark:text-neutral-400">Sign out</button>
+                            </form>
+                        @else
+                            <a href="{{ route('login.create') }}" class="hover:text-neutral-500 {{ request()->routeIs('login.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Sign in</a>
+                        @endauth
                     </nav>
 
                     <button
@@ -52,6 +61,15 @@
                     <a href="{{ route('cart.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">
                         Cart{{ $cartCount > 0 ? " ({$cartCount})" : '' }}
                     </a>
+                    @auth
+                        <a href="{{ route('account.orders.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Your Orders</a>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" class="w-full rounded-md px-2 py-2 text-left hover:bg-neutral-100 dark:hover:bg-neutral-900">Sign out</button>
+                        </form>
+                    @else
+                        <a href="{{ route('login.create') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Sign in</a>
+                    @endauth
                 </nav>
             </header>
 
