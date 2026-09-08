@@ -2,6 +2,8 @@
 
 namespace App\Services\Orders;
 
+use App\Enums\OrderActorType;
+use App\Enums\OrderStatusType;
 use App\Models\Order;
 use App\Services\Cart\CartItem;
 use App\Services\Checkout\Address;
@@ -65,6 +67,21 @@ class OrderService
                     'total_cents' => $totals->totalCents,
                     'currency' => $totals->currency,
                     'idempotency_key' => $idempotencyKey,
+                ]);
+
+                // payment_status/fulfillment_status are deliberately not
+                // mass-assignable (see Order::$fillable); their DB defaults
+                // apply on insert, but Eloquent's in-memory model won't
+                // reflect that until refreshed.
+                $order->refresh();
+
+                $order->statusHistories()->create([
+                    'status_type' => OrderStatusType::Fulfillment,
+                    'from_status' => null,
+                    'to_status' => $order->fulfillment_status->value,
+                    'actor_type' => $userId !== null ? OrderActorType::Customer : OrderActorType::System,
+                    'actor_id' => $userId,
+                    'note' => 'Order placed.',
                 ]);
 
                 foreach ($cartItems as $item) {

@@ -16,4 +16,30 @@ enum PaymentStatus: string
     case Paid = 'paid';
     case Failed = 'failed';
     case Refunded = 'refunded';
+
+    public function toString(): string
+    {
+        return match ($this) {
+            self::PendingPayment => 'Pending Payment',
+            self::Paid => 'Paid',
+            self::Failed => 'Failed',
+            self::Refunded => 'Refunded',
+        };
+    }
+
+    /**
+     * A color name understood by the MoonShine admin UI's badge
+     * component. Returned as a plain string (rather than importing
+     * MoonShine's Color enum) so this domain enum has no dependency on
+     * the admin package.
+     */
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::PendingPayment => 'warning',
+            self::Paid => 'success',
+            self::Failed => 'error',
+            self::Refunded => 'gray',
+        };
+    }
 }

@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Account\AccountOrderController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\HomeController;
@@ -28,4 +31,19 @@ Route::post('/checkout', [CheckoutController::class, 'store'])
     ->middleware('throttle:10,1')
     ->name('checkout.store');
 
+// Public guest-or-owner receipt link — access is the unguessable UUID
+// itself (see OrderPolicy), not login.
 Route::get('/orders/{order:uuid}', [OrderController::class, 'show'])->name('orders.show');
+
+Route::middleware('guest')->group(function () {
+    Route::get('/register', [RegisterController::class, 'create'])->name('register.create');
+    Route::post('/register', [RegisterController::class, 'store'])->name('register.store');
+    Route::get('/login', [LoginController::class, 'create'])->name('login.create');
+    Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+});
+Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+
+Route::middleware('auth')->prefix('account')->name('account.')->group(function () {
+    Route::get('/orders', [AccountOrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order:uuid}', [AccountOrderController::class, 'show'])->name('orders.show');
+});
