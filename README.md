@@ -1,58 +1,120 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CarParts
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A demo B2B/B2C auto-parts storefront built on Laravel 13 / PHP 8.4. It covers a parts catalog with VIN-based fitment lookup, a cart and unpaid checkout flow, customer order tracking, and a staff administration panel — all backing onto the same set of shared services.
 
-## About Laravel
+> Demo data only — this is not a production storefront. Payments are intentionally not integrated yet (see [Payments](#payments) below).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Features
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **Parts catalog** — searchable/filterable parts by category, manufacturer, and SKU, with business-specific pricing tiers.
+- **VIN lookup** — decodes a VIN via the [NHTSA vPIC API](https://vpic.nhtsa.dot.gov/api) to surface compatible fitments, with response caching.
+- **Cart & checkout** — session-based cart with live stock/price revalidation at checkout; guest and authenticated checkout both supported. Every order is created `pending_payment` — no stock is reserved or deducted until a real payment is integrated.
+- **Customer accounts** — email/password registration and login; `/account/orders` lists a customer's own orders and shows a per-order status timeline, item snapshot, and shipment info. Ownership is enforced on every request — an order's ID never grants access to another customer's data.
+- **Guest order receipts** — a guest checkout gets a `/orders/{uuid}` link; the UUID itself is the unguessable access token, not the order number.
+- **Staff admin panel** (`/admin`, via [MoonShine](https://moonshine-laravel.com)) — policy-guarded order management: searchable/paginated order table, payment/fulfillment/date filters, order detail with item snapshots and address info, chronological status history, internal staff notes (never shown to customers), manual shipment/tracking fields, and explicit status-transition actions. Order deletion and ad-hoc order creation are disabled by policy; historical items and totals are read-only.
+- **Shared business rules** — all fulfillment-status transitions, payment gating, concurrency protection, and idempotency live in `App\Services\Orders`, used identically by the MoonShine panel and any future customer/API surface (see [Architecture](#architecture)).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Requirements
 
-## Learning Laravel
+- PHP 8.4+
+- Composer
+- Node 20+ and npm
+- MySQL/MariaDB (or SQLite for quick local use)
+- [ddev](https://ddev.com) (recommended — this project is developed against it) or any equivalent local PHP environment
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Setup
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Configure your database connection in `.env` (or leave `DB_CONNECTION=sqlite` for a quick local file-based setup), then run migrations:
 
-## Contributing
+```bash
+php artisan migrate
+npm run build
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+If you're using ddev, prefix the PHP/artisan commands with `ddev` (e.g. `ddev artisan migrate`, `ddev composer install`) and run `npm`/`ddev` commands from the host as shown in `.claude`/project docs.
 
-## Code of Conduct
+### Local development
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+composer run dev
+```
 
-## Security Vulnerabilities
+This runs the Laravel server, queue listener, log tailer (Pail), and Vite dev server together. Alternatively run `php artisan serve` and `npm run dev` in separate terminals.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Granting staff admin access
 
-## License
+Staff accounts (`moonshine_users`) are entirely separate from customer accounts (`users`) — there is no shared login. Create a staff account interactively so no credentials are ever hardcoded or committed:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan moonshine:user
+```
+
+Follow the prompts to set an email, name, and password, then sign in at `/admin`. Authorization is enforced server-side via `App\Policies\OrderPolicy` — a customer's `web`-guard session grants no access to `/admin` regardless of what they're logged in as.
+
+## Testing
+
+```bash
+php artisan test
+```
+
+or directly via PHPUnit:
+
+```bash
+vendor/bin/phpunit
+```
+
+Pass a path or `--filter=testName` to run a narrower slice, e.g. `php artisan test tests/Feature/OrderFulfillmentTest.php`.
+
+Notable coverage:
+- `tests/Feature/AdminAccessTest.php` — staff-only access to `/admin`, policy-level denial of delete/create.
+- `tests/Feature/AccountOrdersTest.php` — customer order ownership, cross-customer/guest-order isolation.
+- `tests/Feature/OrderFulfillmentTest.php` — valid/invalid status transitions, unpaid-order fulfillment restrictions, idempotent repeated actions, internal-note privacy, stock unaffected by fulfillment actions.
+- `tests/Feature/CartTest.php`, `CheckoutTest.php`, `CatalogTest.php`, `VinLookupTest.php`, `OrderAccessTest.php` — catalog, cart, checkout, and guest-order-access behavior.
+
+## Architecture
+
+```
+app/
+├── Http/Controllers/          # Storefront, Account, Auth, and admin-adjacent controllers
+├── Models/                    # Eloquent models (Order, OrderItem, OrderNote, OrderStatusHistory, Part, User, ...)
+├── Policies/                  # Authorization — OrderPolicy serves both customer and staff contexts
+├── Services/
+│   ├── Cart/                  # Cart contents, revalidation against live price/stock
+│   ├── Checkout/              # Totals calculation, address handling
+│   ├── Inventory/             # Stock checks
+│   ├── Orders/                # Order creation + all fulfillment/shipment/note business rules
+│   └── Vpic/                  # VIN decoding client + caching
+└── MoonShine/                 # Staff admin panel: resources, pages, layout
+```
+
+The `App\Services\Orders` namespace is the single source of truth for order rules — it is not aware of MoonShine or HTTP, and is used identically by admin actions and customer-facing code:
+
+- `OrderService` — creates orders (always `pending_payment`/`unfulfilled`), idempotent on a per-checkout key.
+- `OrderFulfillmentService` — the fulfillment-status state machine (`unfulfilled → processing → shipped → delivered`, plus `cancelled`). Enforces that `processing`/`shipped` require `payment_status = paid`, uses a pessimistic lock + DB transaction per transition, is idempotent (repeating a transition is a safe no-op), and records every change in `OrderStatusHistory` with the acting actor and timestamp.
+- `OrderNoteService` — internal staff notes, stored separately from status history and never rendered on any customer-facing view.
+- `OrderShipmentService` — carrier/tracking-number/tracking-URL updates; rejects non-HTTPS tracking URLs. Tracking is manually maintained — there is no carrier API integration.
+
+Payment status (`pending_payment`, `paid`, ...) and fulfillment status are deliberately independent columns/enums, so payment and shipping progress can never be conflated.
+
+## Payments
+
+This project does not integrate a payment provider. Every order is created `pending_payment` and stock is never reserved or deducted for an unpaid order. The seams for a future integration are documented inline:
+
+- `App\Services\Orders\OrderService` — where a payment session/intent would be initiated after order creation, and where the order's snapshot totals feed into it.
+- `App\Services\Orders\OrderFulfillmentService` — where a verified payment confirmation (e.g. a signature-checked webhook) would flip `payment_status` to `paid`, unblocking `processing`/`shipped` transitions.
+- Stock reservation/deduction on payment confirmation is not implemented — see the inline notes in `OrderService`/`Inventory` services for where it should connect.
+
+No provider-specific dependencies or placeholder integrations are included.
+
+## Known limitations
+
+- No payment provider integration (see above) — checkout ends at an unpaid order.
+- Shipment tracking is manual entry only; no carrier API or live delivery updates.
+- No email notifications (order confirmation, status-change, etc.) are sent yet.
