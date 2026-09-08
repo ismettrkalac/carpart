@@ -1,13 +1,16 @@
 <?php
 
 use App\Http\Controllers\Account\AccountOrderController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PartController;
+use App\Http\Controllers\PayseraWebhookController;
 use App\Http\Controllers\VinLookupController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,12 +37,23 @@ Route::post('/checkout', [CheckoutController::class, 'store'])
 // Public guest-or-owner receipt link — access is the unguessable UUID
 // itself (see OrderPolicy), not login.
 Route::get('/orders/{order:uuid}', [OrderController::class, 'show'])->name('orders.show');
+Route::post('/orders/{order:uuid}/pay', [OrderController::class, 'pay'])->name('orders.pay');
+
+// Paysera calls this directly — no CSRF token, see the exclusion in
+// bootstrap/app.php. Signature verification (PayseraSignature) is what
+// actually authenticates the request instead.
+Route::post('/paysera/webhook', PayseraWebhookController::class)->name('paysera.webhook');
 
 Route::middleware('guest')->group(function () {
     Route::get('/register', [RegisterController::class, 'create'])->name('register.create');
     Route::post('/register', [RegisterController::class, 'store'])->name('register.store');
     Route::get('/login', [LoginController::class, 'create'])->name('login.create');
     Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+
+    Route::get('/forgot-password', [ForgotPasswordController::class, 'create'])->name('password.request');
+    Route::post('/forgot-password', [ForgotPasswordController::class, 'store'])->name('password.email');
+    Route::get('/reset-password/{token}', [ResetPasswordController::class, 'create'])->name('password.reset');
+    Route::post('/reset-password', [ResetPasswordController::class, 'store'])->name('password.update');
 });
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 

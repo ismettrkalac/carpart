@@ -14,9 +14,11 @@ use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 
 /**
- * A checkout attempt's result. Every order is created as pending_payment —
- * no payment provider is integrated yet (see OrderService for the seam
- * where one will connect).
+ * A checkout attempt's result. Every order is created as pending_payment
+ * regardless of provider — see App\Services\Payments\PayseraCheckoutService
+ * for where payment_status later transitions to Paid/Failed, and
+ * App\Services\Inventory\StockDeductionService for the stock decrement
+ * that only ever happens once an order is confirmed paid.
  */
 #[Fillable([
     'user_id',
@@ -25,9 +27,11 @@ use Illuminate\Support\Str;
     'billing_name', 'billing_line1', 'billing_line2', 'billing_city', 'billing_state', 'billing_postal_code', 'billing_country',
     'subtotal_cents', 'shipping_cents', 'tax_cents', 'total_cents', 'currency',
     'idempotency_key',
-    // Deliberately NOT fillable: payment_status, fulfillment_status. Those
-    // only ever change through App\Services\Orders\OrderFulfillmentService,
-    // never via mass assignment/a raw form save.
+    // Deliberately NOT fillable: payment_status, fulfillment_status,
+    // payment_provider, payment_reference. Those only ever change through
+    // App\Services\Orders\OrderFulfillmentService or
+    // App\Services\Payments\PayseraCheckoutService, never via mass
+    // assignment/a raw form save.
     'carrier', 'tracking_number', 'tracking_url',
 ])]
 class Order extends Model

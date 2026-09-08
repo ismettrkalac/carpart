@@ -1,12 +1,40 @@
 <x-layout title="Order confirmation">
     <div class="mx-auto max-w-3xl px-6 py-10">
-        <div class="rounded-md bg-green-50 p-4 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
-            <p class="font-medium">Order received. Payment has not been collected.</p>
-            <p class="mt-1">
-                This version of the site doesn't process payments yet, so availability is not guaranteed until
-                payment is implemented and completed — we'll be in touch to confirm before fulfilling this order.
-            </p>
-        </div>
+        @if ($order->payment_status === \App\Enums\PaymentStatus::Paid)
+            <div class="rounded-md bg-green-50 p-4 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
+                <p class="font-medium">Payment received. Thank you!</p>
+            </div>
+        @elseif ($order->payment_status === \App\Enums\PaymentStatus::Failed)
+            <div class="rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-950 dark:text-red-300">
+                <p class="font-medium">Payment failed.</p>
+                <p class="mt-1">No charge was completed. You can try again below.</p>
+                <form method="POST" action="{{ route('orders.pay', $order) }}" class="mt-3">
+                    @csrf
+                    <button type="submit" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900">
+                        Try payment again
+                    </button>
+                </form>
+            </div>
+        @elseif ($order->payment_provider !== null)
+            <div class="rounded-md bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                <p class="font-medium">Waiting for payment confirmation.</p>
+                <p class="mt-1">If you completed payment, this page will update shortly. If you closed the payment page without finishing, you can pick up where you left off.</p>
+                <form method="POST" action="{{ route('orders.pay', $order) }}" class="mt-3">
+                    @csrf
+                    <button type="submit" class="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-neutral-900">
+                        Complete payment
+                    </button>
+                </form>
+            </div>
+        @else
+            <div class="rounded-md bg-green-50 p-4 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
+                <p class="font-medium">Order received. Payment has not been collected.</p>
+                <p class="mt-1">
+                    This version of the site doesn't process payments yet, so availability is not guaranteed until
+                    payment is implemented and completed — we'll be in touch to confirm before fulfilling this order.
+                </p>
+            </div>
+        @endif
 
         <div class="mt-6 flex flex-wrap items-start justify-between gap-4">
             <div>

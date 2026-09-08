@@ -113,6 +113,38 @@ class CartTest extends TestCase
         $this->assertSame(4, session('cart')[$part->id]);
     }
 
+    public function test_quantity_can_be_updated_via_json_and_returns_a_summary(): void
+    {
+        $part = Part::factory()->create(['base_price_cents' => 5000, 'stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->patchJson(route('cart.items.update', $part), ['quantity' => 4]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'isEmpty' => false,
+            'cartCount' => 4,
+            'subtotalCents' => 20000,
+            'item' => [
+                'lineTotalCents' => 20000,
+                'needsAttention' => false,
+            ],
+        ]);
+        $this->assertSame(4, session('cart')[$part->id]);
+    }
+
+    public function test_updating_beyond_stock_via_json_returns_an_error_without_changing_quantity(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 5, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 2]);
+
+        $response = $this->patchJson(route('cart.items.update', $part), ['quantity' => 99]);
+
+        $response->assertStatus(422);
+        $response->assertJsonStructure(['message']);
+        $this->assertSame(2, session('cart')[$part->id]);
+    }
+
     public function test_updating_beyond_available_stock_is_rejected_and_leaves_quantity_unchanged(): void
     {
         $part = Part::factory()->create(['stock_quantity' => 5, 'status' => PartStatus::Active]);
@@ -133,6 +165,31 @@ class CartTest extends TestCase
 
         $response->assertRedirect();
         $this->assertArrayNotHasKey($part->id, session('cart', []));
+    }
+
+    public function test_an_item_can_be_removed_via_json_and_returns_a_summary(): void
+    {
+        $part = Part::factory()->create(['base_price_cents' => 3000, 'stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $other = Part::factory()->create(['base_price_cents' => 1000, 'stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+        $this->post(route('cart.items.store', $other), ['quantity' => 1]);
+
+        $response = $this->deleteJson(route('cart.items.destroy', $part->id));
+
+        $response->assertOk();
+        $response->assertJson(['isEmpty' => false, 'subtotalCents' => 1000]);
+        $this->assertArrayNotHasKey($part->id, session('cart', []));
+    }
+
+    public function test_removing_the_last_item_via_json_reports_the_cart_as_empty(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->deleteJson(route('cart.items.destroy', $part->id));
+
+        $response->assertOk();
+        $response->assertJson(['isEmpty' => true, 'subtotalCents' => 0]);
     }
 
     public function test_removing_an_item_whose_part_was_deleted_still_works(): void
