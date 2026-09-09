@@ -88,6 +88,23 @@ class Part extends Model
     }
 
     /**
+     * @return HasMany<PartImage, $this>
+     */
+    public function images(): HasMany
+    {
+        return $this->hasMany(PartImage::class)->orderBy('position');
+    }
+
+    /**
+     * The part's first (lowest-position) gallery image, shown in listings
+     * and cards. Null falls back to the category icon placeholder.
+     */
+    public function primaryImageUrl(): ?string
+    {
+        return $this->images->first()?->url();
+    }
+
+    /**
      * Resolve the price in cents for the given business: a negotiated
      * override takes precedence, otherwise the tier discount applies.
      */

@@ -33,7 +33,7 @@
                             @endif
 
                             <div class="flex items-start gap-4">
-                                <x-category-icon :slug="$item->part?->category?->slug" class="size-10 shrink-0 text-neutral-400" />
+                                <x-part-image :part="$item->part" image-class="size-10 rounded-md object-cover" icon-class="size-10 text-neutral-400" />
 
                                 <div class="min-w-0 flex-1">
                                     @if ($item->part)

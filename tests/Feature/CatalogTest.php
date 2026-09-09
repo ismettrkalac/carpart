@@ -6,6 +6,7 @@ use App\Enums\PartStatus;
 use App\Models\Category;
 use App\Models\Manufacturer;
 use App\Models\Part;
+use App\Models\PartImage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,6 +24,28 @@ class CatalogTest extends TestCase
         $response->assertOk();
         $response->assertSee('Brakes');
         $response->assertSee('Front Brake Rotor');
+    }
+
+    public function test_home_page_shows_a_parts_primary_image(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 5]);
+        PartImage::factory()->for($part)->create(['position' => 0, 'path' => 'parts/rotor.jpg']);
+
+        $response = $this->get('/');
+
+        $response->assertOk();
+        $response->assertSee('parts/rotor.jpg', false);
+    }
+
+    public function test_home_page_falls_back_to_the_category_icon_without_an_image(): void
+    {
+        $category = Category::factory()->create(['slug' => 'brakes']);
+        Part::factory()->create(['category_id' => $category->id, 'stock_quantity' => 5]);
+
+        $response = $this->get('/');
+
+        $response->assertOk();
+        $response->assertDontSee('<img', false);
     }
 
     public function test_parts_index_only_lists_published_parts(): void
@@ -145,6 +168,19 @@ class CatalogTest extends TestCase
         $response = $this->get(route('parts.show', $part));
 
         $response->assertNotFound();
+    }
+
+    public function test_part_page_shows_a_thumbnail_strip_for_multiple_images(): void
+    {
+        $part = Part::factory()->create();
+        PartImage::factory()->for($part)->create(['position' => 0, 'path' => 'parts/front.jpg']);
+        PartImage::factory()->for($part)->create(['position' => 1, 'path' => 'parts/back.jpg']);
+
+        $response = $this->get(route('parts.show', $part));
+
+        $response->assertOk();
+        $response->assertSee('parts/front.jpg', false);
+        $response->assertSee('parts/back.jpg', false);
     }
 
     public function test_part_page_shows_related_parts_from_the_same_category(): void

@@ -28,7 +28,7 @@ class PartController extends Controller
             : null;
 
         $parts = Part::published()
-            ->with(['manufacturer', 'category'])
+            ->with(['manufacturer', 'category', 'images'])
             ->search($validated['q'] ?? null)
             ->when($category, fn ($query) => $query->where('category_id', $category->id))
             ->when($manufacturer, fn ($query) => $query->where('manufacturer_id', $manufacturer->id))
@@ -60,10 +60,10 @@ class PartController extends Controller
     {
         abort_unless($part->status === PartStatus::Active, 404);
 
-        $part->load(['manufacturer', 'category', 'fitments']);
+        $part->load(['manufacturer', 'category', 'fitments', 'images']);
 
         $related = Part::published()
-            ->with('manufacturer')
+            ->with(['manufacturer', 'images'])
             ->where('category_id', $part->category_id)
             ->where('id', '!=', $part->id)
             ->take(4)
