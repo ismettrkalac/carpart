@@ -91,7 +91,7 @@ app/
 ├── Services/
 │   ├── Cart/                  # Cart contents, revalidation against live price/stock
 │   ├── Checkout/              # Totals calculation, address handling
-│   ├── Inventory/             # Stock checks (read-only) + post-payment stock decrement
+│   ├── Inventory/             # Stock checks, time-boxed reservations, post-payment stock decrement
 │   ├── Orders/                # Order creation + all fulfillment/shipment/note business rules
 │   ├── Payments/              # Paysera Checkout integration (sessions, webhook, signature verification)
 │   └── Vpic/                  # VIN decoding client + caching
@@ -116,11 +116,9 @@ Payments go through [Paysera Checkout](https://developers.paysera.com/guides/che
 - Checkout is **hosted/redirect-based**: the customer enters their card on Paysera's own page, which never touches this app. That keeps the integration eligible for **PCI DSS SAQ A**, the lightest self-assessment tier — embedding a card-entry widget directly on this app's own checkout page instead would require the much larger SAQ A-EP. (Being PCI compliant still requires completing that self-assessment with your own Paysera merchant account — this app's architecture only makes that possible at the lightest tier, it doesn't complete it for you.)
 - Not configured out of the box: leave `PAYSERA_CLIENT_ID`/`PAYSERA_CLIENT_SECRET` blank in `.env` and checkout falls back to the pre-Paysera unpaid "order received" receipt, so the site works without any payment credentials at all. See [Granting staff admin access](#granting-staff-admin-access)-style setup — create a Paysera account and a Checkout (Modern) project at https://developers.paysera.com, then put its `client_id`/`client_secret` in your own `.env`.
 - Paysera's webhook payload doesn't publish a formal `status` enum for orders (confirmed against their OpenAPI spec) — payment confirmation is decided from the numeric `order.amount`/`order.amount_paid` fields instead of a status string. Worth double-checking against a real sandbox webhook payload if Paysera's response shape ever changes.
-- **Stock is deducted only once payment is confirmed** — `App\Services\Inventory\StockDeductionService::deductForOrder()`, called from inside the same locked transaction that flips `payment_status` to `Paid` in `PayseraCheckoutService::handleWebhookEvent()`. An unpaid order never reserves or deducts stock; a duplicate webhook delivery (Paysera, like most providers, only guarantees at-least-once delivery) can't double-decrement, since the order row is locked before its payment status is checked.
-- Not yet implemented: a time-boxed stock *reservation* while a shopper is on Paysera's payment page (closing the small window between checkout-session creation and payment confirmation where the last unit could still be oversold) — see the inline notes in `StockChecker`.
+- **Stock is deducted only once payment is confirmed** — `App\Services\Inventory\StockDeductionService::deductForOrder()`, called from inside the same locked transaction that flips `payment_status` to `Paid` in `PayseraCheckoutService::handleWebhookEvent()`. A duplicate webhook delivery (Paysera, like most providers, only guarantees at-least-once delivery) can't double-decrement, since the order row is locked before its payment status is checked.
+- **Stock is reserved while an order is pending payment** — `App\Services\Inventory\StockReservationService::reserveForOrder()` creates a time-boxed hold (`checkout.reservation_minutes`, default 30) on each item's quantity the moment an order is placed, closing the window between checkout-session creation and payment confirmation where the last unit could otherwise be oversold. `StockChecker` subtracts active reservations from availability, so a second shopper's cart/checkout sees the held stock as unavailable. The reservation is released once payment is confirmed (`StockDeductionService`, since the units are then actually decremented) or if the order is cancelled first (`OrderFulfillmentService`); an abandoned checkout's hold simply expires on its own.
 
 ## Known limitations
 
 - Shipment tracking is manual entry only; no carrier API or live delivery updates.
-- No email notifications for order placement or status changes yet (password-reset emails do work — the mailer plumbing exists, just isn't wired to order events).
-- No stock *reservation* while a shopper is mid-payment (see [Payments](#payments) above) — only a real oversell race at the very last unit, closed at payment confirmation.

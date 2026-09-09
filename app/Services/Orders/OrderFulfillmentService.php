@@ -6,8 +6,11 @@ use App\Enums\FulfillmentStatus;
 use App\Enums\OrderActorType;
 use App\Enums\OrderStatusType;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderShippedMail;
 use App\Models\Order;
+use App\Services\Inventory\StockReservationService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * The single place fulfillment-status rules live. Both the MoonShine staff
@@ -20,6 +23,10 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderFulfillmentService
 {
+    public function __construct(
+        private readonly StockReservationService $stockReservation = new StockReservationService,
+    ) {}
+
     /**
      * Valid fulfillment transitions, keyed by current status value.
      * Cancellation is not allowed once an order has shipped — at that
@@ -53,7 +60,9 @@ class OrderFulfillmentService
         ?int $actorId,
         ?string $note = null,
     ): Order {
-        return DB::transaction(function () use ($order, $to, $actorType, $actorId, $note): Order {
+        $transitioned = false;
+
+        $locked = DB::transaction(function () use ($order, $to, $actorType, $actorId, $note, &$transitioned): Order {
             // Pessimistic lock: two staff clicking "Ship" on the same
             // order at once must not both succeed independently.
             $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
@@ -91,8 +100,26 @@ class OrderFulfillmentService
                 'note' => $note,
             ]);
 
+            if ($to === FulfillmentStatus::Cancelled) {
+                // Releases whatever's left of this order's stock
+                // reservation — a no-op if payment already went through
+                // and StockDeductionService released it first.
+                $this->stockReservation->releaseForOrder($locked);
+            }
+
+            $transitioned = true;
+
             return $locked;
         });
+
+        // Only a genuine unfulfilled/processing -> shipped transition sends
+        // an email — not the idempotent no-op above, and not any other
+        // transition.
+        if ($transitioned && $to === FulfillmentStatus::Shipped) {
+            Mail::to($locked->email)->queue(new OrderShippedMail($locked));
+        }
+
+        return $locked;
     }
 
     /**

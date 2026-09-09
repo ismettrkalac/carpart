@@ -14,12 +14,21 @@ use App\Models\Part;
  * this. Never called standalone, so it carries no idempotency guard of
  * its own.
  *
+ * Also releases the order's stock reservations (see
+ * StockReservationService) — once these units are actually decremented,
+ * the temporary hold that kept them out of other shoppers' availability
+ * checks has done its job.
+ *
  * Deliberately separate from StockChecker, which stays read-only and is
  * used by the cart/checkout to validate availability before any payment
- * exists — an unpaid order still never reserves or deducts stock.
+ * exists.
  */
 class StockDeductionService
 {
+    public function __construct(
+        private readonly StockReservationService $stockReservation = new StockReservationService,
+    ) {}
+
     public function deductForOrder(Order $order): void
     {
         $order->loadMissing('items');
@@ -36,5 +45,7 @@ class StockDeductionService
 
             $part->decrement('stock_quantity', min($item->quantity, $part->stock_quantity));
         }
+
+        $this->stockReservation->releaseForOrder($order);
     }
 }

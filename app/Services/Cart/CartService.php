@@ -83,10 +83,11 @@ class CartService
             return collect();
         }
 
-        $parts = Part::whereIn('id', array_keys($raw))->get()->keyBy('id');
+        $parts = Part::whereIn('id', array_keys($raw))->with('images')->get()->keyBy('id');
+        $reserved = $this->stock->reservedQuantities($parts->keys());
 
         return collect($raw)
-            ->map(fn (int $quantity, int $partId) => CartItem::fromPart($parts->get($partId), $quantity))
+            ->map(fn (int $quantity, int $partId) => CartItem::fromPart($parts->get($partId), $quantity, $reserved[$partId] ?? 0))
             ->values();
     }
 

@@ -4,13 +4,16 @@ namespace App\Services\Orders;
 
 use App\Enums\OrderActorType;
 use App\Enums\OrderStatusType;
+use App\Mail\OrderConfirmationMail;
 use App\Models\Order;
 use App\Services\Cart\CartItem;
 use App\Services\Checkout\Address;
 use App\Services\Checkout\CheckoutTotals;
+use App\Services\Inventory\StockReservationService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Creates orders and their line items. Every order is created
@@ -22,9 +25,19 @@ use Illuminate\Support\Facades\DB;
  * Order/OrderItem's snapshot fields (sku/name/unit_price_cents) are what
  * that payment/receipt step (and the stock decrement in
  * App\Services\Inventory\StockDeductionService, once paid) rely on.
+ *
+ * Placing an order also reserves its items' stock (see
+ * App\Services\Inventory\StockReservationService) so a second shopper
+ * can't check out the same last unit while this one is still pending
+ * payment — see App\Services\Inventory\StockChecker for how that's
+ * enforced.
  */
 class OrderService
 {
+    public function __construct(
+        private readonly StockReservationService $stockReservation = new StockReservationService,
+    ) {}
+
     /**
      * @param  Collection<int, CartItem>  $cartItems  must already be
      *                                                revalidated by the
@@ -47,7 +60,7 @@ class OrderService
         }
 
         try {
-            return DB::transaction(function () use ($cartItems, $totals, $email, $shipping, $billing, $userId, $idempotencyKey): Order {
+            $order = DB::transaction(function () use ($cartItems, $totals, $email, $shipping, $billing, $userId, $idempotencyKey): Order {
                 $order = Order::create([
                     'user_id' => $userId,
                     'email' => $email,
@@ -94,12 +107,22 @@ class OrderService
                     ]);
                 }
 
+                $this->stockReservation->reserveForOrder($order);
+
                 return $order;
             });
         } catch (UniqueConstraintViolationException) {
             // A concurrent duplicate request won the race and created the
             // order for this key first — return that one instead of failing.
+            // It already got its confirmation email from the request that
+            // actually created it, so don't send another one here.
             return Order::where('idempotency_key', $idempotencyKey)->firstOrFail();
         }
+
+        // Sent after the transaction commits, never from inside it — a
+        // rolled-back order must never trigger an email.
+        Mail::to($order->email)->queue(new OrderConfirmationMail($order));
+
+        return $order;
     }
 }
