@@ -3,7 +3,7 @@
 <div class="group flex flex-col rounded-lg border border-neutral-200 p-4 transition hover:border-neutral-300 hover:shadow-sm dark:border-neutral-800 dark:hover:border-neutral-700">
     <a href="{{ route('parts.show', $part) }}" class="flex flex-1 flex-col">
         <div class="flex items-start justify-between gap-2">
-            <x-category-icon :slug="$part->category?->slug" class="size-8 shrink-0 text-neutral-400" />
+            <x-part-image :part="$part" image-class="size-8 rounded-md object-cover" icon-class="size-8 text-neutral-400" />
             @if ($part->isInStock())
                 <span class="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-400">In stock</span>
             @else

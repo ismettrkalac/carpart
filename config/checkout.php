@@ -28,4 +28,19 @@ return [
         'rate_percent' => (float) env('CHECKOUT_TAX_RATE_PERCENT', 7.25),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Stock Reservation Window
+    |--------------------------------------------------------------------------
+    |
+    | How long an order holds its items' stock while pending payment (see
+    | App\Services\Inventory\StockReservationService). Should comfortably
+    | cover how long a shopper might reasonably take on Paysera's hosted
+    | payment page before the reservation expires and the stock becomes
+    | available to other shoppers again.
+    |
+    */
+
+    'reservation_minutes' => (int) env('CHECKOUT_RESERVATION_MINUTES', 30),
+
 ];

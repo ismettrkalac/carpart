@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Enums\FulfillmentStatus;
 use App\Enums\PartStatus;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderConfirmationMail;
 use App\Models\Order;
 use App\Models\Part;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class CheckoutTest extends TestCase
@@ -61,6 +63,7 @@ class CheckoutTest extends TestCase
         $this->assertSame(PaymentStatus::PendingPayment, $order->payment_status);
         $this->assertSame(FulfillmentStatus::Unfulfilled, $order->fulfillment_status);
         $this->assertSame(10, $part->fresh()->stock_quantity);
+        $this->assertDatabaseHas('stock_reservations', ['order_id' => $order->id, 'part_id' => $part->id, 'quantity' => 2]);
 
         $this->assertSame(1, $order->items->count());
         $item = $order->items->first();
@@ -69,6 +72,34 @@ class CheckoutTest extends TestCase
         $this->assertSame(5000, $item->unit_price_cents);
         $this->assertSame(2, $item->quantity);
         $this->assertSame(10000, $item->line_total_cents);
+    }
+
+    public function test_submitting_checkout_queues_an_order_confirmation_email(): void
+    {
+        Mail::fake();
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part);
+
+        $this->post(route('checkout.store'), $this->validCheckoutPayload($token));
+
+        $order = Order::first();
+        Mail::assertQueued(
+            OrderConfirmationMail::class,
+            fn (OrderConfirmationMail $mail): bool => $mail->hasTo($order->email) && $mail->order->is($order),
+        );
+    }
+
+    public function test_duplicate_submission_of_the_same_checkout_only_queues_one_confirmation_email(): void
+    {
+        Mail::fake();
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part);
+        $payload = $this->validCheckoutPayload($token);
+
+        $this->post(route('checkout.store'), $payload);
+        $this->post(route('checkout.store'), $payload);
+
+        Mail::assertQueuedCount(1);
     }
 
     public function test_submitting_checkout_clears_the_cart(): void
@@ -273,6 +304,23 @@ class CheckoutTest extends TestCase
         $response->assertOk();
         $response->assertSee('no longer available');
         $this->assertSame(0, Order::count());
+    }
+
+    public function test_checking_out_the_last_unit_reserves_it_so_it_cannot_be_added_to_another_cart(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 1, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part, 1);
+
+        $checkout = $this->post(route('checkout.store'), $this->validCheckoutPayload($token));
+        $checkout->assertRedirect(route('orders.show', Order::first()));
+
+        // The cart is empty again (checkout cleared it) — a fresh attempt
+        // to buy the same unit, which Order::first() now holds a stock
+        // reservation on, must be rejected rather than oversold.
+        $response = $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response->assertSessionHasErrors('quantity');
+        $this->assertEmpty(session('cart', []));
     }
 
     public function test_reviewing_a_changed_order_and_resubmitting_succeeds(): void

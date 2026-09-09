@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Enums\FulfillmentStatus;
 use App\Enums\OrderActorType;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\OrderNote;
 use App\Models\Part;
+use App\Models\StockReservation;
 use App\Models\User;
 use App\Services\Orders\OrderFulfillmentService;
 use App\Services\Orders\OrderNoteService;
@@ -15,6 +17,7 @@ use App\Services\Orders\OrderShipmentException;
 use App\Services\Orders\OrderShipmentService;
 use App\Services\Orders\OrderTransitionException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class OrderFulfillmentTest extends TestCase
@@ -105,6 +108,16 @@ class OrderFulfillmentTest extends TestCase
         $this->assertSame(FulfillmentStatus::Cancelled, $updated->fulfillment_status);
     }
 
+    public function test_cancelling_an_order_releases_its_stock_reservation(): void
+    {
+        $order = $this->makeOrder(payment: PaymentStatus::PendingPayment, fulfillment: FulfillmentStatus::Unfulfilled);
+        StockReservation::factory()->for(Part::factory())->for($order)->create();
+
+        app(OrderFulfillmentService::class)->cancel($order, OrderActorType::Staff, null);
+
+        $this->assertSame(0, StockReservation::where('order_id', $order->id)->count());
+    }
+
     public function test_a_shipped_order_cannot_be_cancelled(): void
     {
         $order = $this->makeOrder(payment: PaymentStatus::Paid, fulfillment: FulfillmentStatus::Shipped);
@@ -147,6 +160,41 @@ class OrderFulfillmentTest extends TestCase
 
         $this->assertSame(FulfillmentStatus::Processing, $order->fresh()->fulfillment_status);
         $this->assertSame(1, $order->statusHistories()->count());
+    }
+
+    public function test_marking_an_order_shipped_queues_a_shipped_email(): void
+    {
+        Mail::fake();
+        $order = $this->makeOrder(payment: PaymentStatus::Paid, fulfillment: FulfillmentStatus::Processing);
+
+        app(OrderFulfillmentService::class)->transitionTo($order, FulfillmentStatus::Shipped, OrderActorType::Staff, null);
+
+        Mail::assertQueued(
+            OrderShippedMail::class,
+            fn (OrderShippedMail $mail): bool => $mail->hasTo($order->email) && $mail->order->is($order),
+        );
+    }
+
+    public function test_repeating_the_shipped_transition_does_not_queue_a_second_email(): void
+    {
+        Mail::fake();
+        $order = $this->makeOrder(payment: PaymentStatus::Paid, fulfillment: FulfillmentStatus::Processing);
+        $service = app(OrderFulfillmentService::class);
+
+        $service->transitionTo($order, FulfillmentStatus::Shipped, OrderActorType::Staff, null);
+        $service->transitionTo($order->fresh(), FulfillmentStatus::Shipped, OrderActorType::Staff, null);
+
+        Mail::assertQueuedCount(1);
+    }
+
+    public function test_marking_an_order_processing_does_not_queue_a_shipped_email(): void
+    {
+        Mail::fake();
+        $order = $this->makeOrder(payment: PaymentStatus::Paid, fulfillment: FulfillmentStatus::Unfulfilled);
+
+        app(OrderFulfillmentService::class)->transitionTo($order, FulfillmentStatus::Processing, OrderActorType::Staff, null);
+
+        Mail::assertNothingQueued();
     }
 
     public function test_fulfillment_actions_never_change_stock(): void

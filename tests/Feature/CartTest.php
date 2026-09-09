@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\PartStatus;
+use App\Models\Order;
 use App\Models\Part;
+use App\Models\StockReservation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -100,6 +102,31 @@ class CartTest extends TestCase
 
         $response->assertSessionHasErrors('quantity');
         $this->assertEmpty(session('cart', []));
+    }
+
+    public function test_adding_stock_already_reserved_by_another_orders_checkout_is_rejected(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 3, 'status' => PartStatus::Active]);
+        StockReservation::factory()->for($part)->for(Order::factory())->create(['quantity' => 2]);
+
+        $response = $this->post(route('cart.items.store', $part), ['quantity' => 2]);
+
+        $response->assertSessionHasErrors('quantity');
+        $this->assertEmpty(session('cart', []));
+    }
+
+    public function test_cart_page_flags_a_line_that_now_exceeds_stock_reserved_by_another_order(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 5, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 4]);
+        // Someone else checks out afterward, holding 3 of the remaining 5 —
+        // only 2 are actually still available for this cart's 4.
+        StockReservation::factory()->for($part)->for(Order::factory())->create(['quantity' => 3]);
+
+        $response = $this->get(route('cart.index'));
+
+        $response->assertOk();
+        $response->assertSee('Only 2 available');
     }
 
     public function test_quantity_can_be_updated(): void

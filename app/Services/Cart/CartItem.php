@@ -23,11 +23,21 @@ final readonly class CartItem
         public int $stockQuantity,
     ) {}
 
-    public static function fromPart(?Part $part, int $quantity): self
+    /**
+     * @param  int  $reservedQuantity  units of this part currently held by
+     *                                 other orders' active stock
+     *                                 reservations (see StockChecker) —
+     *                                 subtracted from stock_quantity so a
+     *                                 cart line can't exceed what's
+     *                                 actually still purchasable.
+     */
+    public static function fromPart(?Part $part, int $quantity, int $reservedQuantity = 0): self
     {
+        $availableQuantity = max(0, ($part?->stock_quantity ?? 0) - $reservedQuantity);
+
         $isAvailable = $part !== null
             && $part->status === PartStatus::Active
-            && $part->stock_quantity > 0;
+            && $availableQuantity > 0;
 
         $unitPriceCents = $part?->base_price_cents ?? 0;
 
@@ -38,13 +48,14 @@ final readonly class CartItem
             unitPriceCents: $unitPriceCents,
             lineTotalCents: $unitPriceCents * $quantity,
             isAvailable: $isAvailable,
-            stockQuantity: $part?->stock_quantity ?? 0,
+            stockQuantity: $availableQuantity,
         );
     }
 
     /**
-     * True when the requested quantity is more than what's currently in
-     * stock — doesn't block viewing the cart, but must block checkout.
+     * True when the requested quantity is more than what's actually still
+     * purchasable (on hand minus other orders' active reservations) —
+     * doesn't block viewing the cart, but must block checkout.
      */
     public function exceedsStock(): bool
     {

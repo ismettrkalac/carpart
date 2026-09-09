@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Order;
 use App\Models\Part;
+use App\Models\StockReservation;
 use App\Services\Inventory\StockDeductionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -37,6 +38,18 @@ class StockDeductionServiceTest extends TestCase
         app(StockDeductionService::class)->deductForOrder($order);
 
         $this->assertSame(0, $part->fresh()->stock_quantity);
+    }
+
+    public function test_it_releases_the_orders_stock_reservation(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 10]);
+        $order = Order::factory()->create();
+        $this->addItem($order, $part, 3);
+        StockReservation::factory()->for($part)->for($order)->create(['quantity' => 3]);
+
+        app(StockDeductionService::class)->deductForOrder($order);
+
+        $this->assertSame(0, StockReservation::where('order_id', $order->id)->count());
     }
 
     public function test_a_deleted_part_is_skipped_without_error(): void

@@ -15,7 +15,7 @@ class HomeController extends Controller
             ->get();
 
         $featuredParts = Part::published()
-            ->with(['manufacturer', 'category'])
+            ->with(['manufacturer', 'category', 'images'])
             ->where('stock_quantity', '>', 0)
             ->latest()
             ->take(8)

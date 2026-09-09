@@ -5,6 +5,7 @@ namespace App\Services\Payments;
 use App\Enums\OrderActorType;
 use App\Enums\OrderStatusType;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderPaymentConfirmedMail;
 use App\Models\Order;
 use App\Services\Inventory\StockDeductionService;
 use Illuminate\Http\Client\ConnectionException;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Talks to Paysera's Checkout API (https://developers.paysera.com) over
@@ -148,17 +150,17 @@ class PayseraCheckoutService
             return;
         }
 
-        DB::transaction(function () use ($merchantOrderId, $orderData): void {
+        $order = DB::transaction(function () use ($merchantOrderId, $orderData): ?Order {
             $order = Order::where('uuid', $merchantOrderId)->lockForUpdate()->first();
 
             if ($order === null) {
                 Log::warning('Paysera webhook referenced an unknown order', ['merchant_order_id' => $merchantOrderId]);
 
-                return;
+                return null;
             }
 
             if ($order->payment_status !== PaymentStatus::PendingPayment) {
-                return;
+                return null;
             }
 
             $order->forceFill(['payment_status' => PaymentStatus::Paid])->save();
@@ -173,7 +175,15 @@ class PayseraCheckoutService
             ]);
 
             $this->stockDeduction->deductForOrder($order);
+
+            return $order;
         });
+
+        // Null means the webhook was a no-op (unknown order, or a duplicate
+        // delivery of an already-paid order) — nothing changed, so no email.
+        if ($order !== null) {
+            Mail::to($order->email)->queue(new OrderPaymentConfirmedMail($order));
+        }
     }
 
     /**

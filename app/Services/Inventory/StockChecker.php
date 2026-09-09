@@ -4,24 +4,21 @@ namespace App\Services\Inventory;
 
 use App\Enums\PartStatus;
 use App\Models\Part;
+use App\Models\StockReservation;
 
 /**
- * Read-only stock checks used by the cart and checkout.
+ * Read-only stock checks used by the cart and checkout. Never decrements
+ * Part::stock_quantity itself — that only happens once an order is
+ * confirmed paid, in StockDeductionService.
  *
- * Deliberately does nothing else here: it never reserves or decrements
- * Part::stock_quantity. A pending_payment order still has NO effect on
- * stock — availability is only ever a live read of the current quantity,
- * so two shoppers can both "check out" the last unit and both land on an
- * unpaid order. The actual decrement, once an order is confirmed paid,
- * lives in App\Services\Inventory\StockDeductionService instead — kept
- * separate so this class's read-only contract stays simple, and so
- * CartService/CheckoutCalculator never need to change.
- *
- * Not yet implemented: a time-boxed stock *reservation* while a shopper
- * is on the payment provider's page (e.g. a `Part.reserved_quantity`
- * column or a `stock_reservations` table), which would close the small
- * window between checkout-session creation and payment confirmation
- * where the last unit could still be oversold.
+ * "Available" here means stock_quantity minus any active (non-expired)
+ * StockReservation rows for that part — see StockReservationService for
+ * where those are created (when an order is placed) and released (once
+ * paid, or if the order is cancelled first). That's what closes the
+ * window between checkout-session creation and payment confirmation:
+ * once one shopper's order reserves the last unit, a second shopper's
+ * cart/checkout sees it as unavailable until that reservation is
+ * released or expires.
  */
 class StockChecker
 {
@@ -29,6 +26,30 @@ class StockChecker
     {
         return $part->status === PartStatus::Active
             && $quantity >= 1
-            && $part->stock_quantity >= $quantity;
+            && $this->availableQuantity($part) >= $quantity;
+    }
+
+    public function availableQuantity(Part $part): int
+    {
+        return max(0, $part->stock_quantity - ($this->reservedQuantities([$part->id])[$part->id] ?? 0));
+    }
+
+    /**
+     * Reserved quantity per part, for a batch of parts at once — used by
+     * the cart listing so it doesn't run one query per line.
+     *
+     * @param  iterable<int>  $partIds
+     * @return array<int, int> part_id => reserved quantity
+     */
+    public function reservedQuantities(iterable $partIds): array
+    {
+        return StockReservation::query()
+            ->whereIn('part_id', $partIds)
+            ->active()
+            ->selectRaw('part_id, sum(quantity) as reserved')
+            ->groupBy('part_id')
+            ->pluck('reserved', 'part_id')
+            ->map(fn (mixed $reserved): int => (int) $reserved)
+            ->all();
     }
 }

@@ -13,8 +13,35 @@
         </nav>
 
         <div class="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-2">
-            <div class="flex aspect-square items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
-                <x-category-icon :slug="$part->category?->slug" class="size-24 text-neutral-300 dark:text-neutral-700" />
+            <div @if ($part->images->isNotEmpty()) x-data="{ active: 0 }" @endif>
+                <div class="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
+                    @forelse ($part->images as $index => $image)
+                        <img
+                            x-show="active === {{ $index }}"
+                            @if (! $loop->first) x-cloak @endif
+                            src="{{ $image->url() }}"
+                            alt="{{ $part->name }}"
+                            class="size-full object-cover"
+                        >
+                    @empty
+                        <x-category-icon :slug="$part->category?->slug" class="size-24 text-neutral-300 dark:text-neutral-700" />
+                    @endforelse
+                </div>
+
+                @if ($part->images->count() > 1)
+                    <div class="mt-3 flex gap-2">
+                        @foreach ($part->images as $index => $image)
+                            <button
+                                type="button"
+                                x-on:click="active = {{ $index }}"
+                                class="size-16 shrink-0 overflow-hidden rounded-md border-2 border-transparent"
+                                :class="{ 'border-neutral-900 dark:border-white': active === {{ $index }} }"
+                            >
+                                <img src="{{ $image->url() }}" alt="" class="size-full object-cover">
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
             </div>
 
             <div>
