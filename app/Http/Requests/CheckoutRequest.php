@@ -49,6 +49,12 @@ class CheckoutRequest extends FormRequest
             // Idempotency key minted when the checkout page rendered;
             // see CheckoutSnapshot / CheckoutController.
             'checkout_token' => ['required', 'string'],
+
+            // Logged-in only (guests have no account to save it to) —
+            // CheckoutController silently ignores this for guests rather
+            // than validating it away, since the checkbox itself is
+            // hidden for them.
+            'save_address' => ['nullable', 'boolean'],
         ];
     }
 

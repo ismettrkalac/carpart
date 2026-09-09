@@ -49,4 +49,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Order::class);
     }
+
+    /**
+     * @return HasMany<SavedAddress, $this>
+     */
+    public function savedAddresses(): HasMany
+    {
+        return $this->hasMany(SavedAddress::class);
+    }
 }

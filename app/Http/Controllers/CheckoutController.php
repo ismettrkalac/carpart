@@ -6,6 +6,7 @@ use App\Enums\PaymentStatus;
 use App\Http\Requests\CheckoutRequest;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Account\SavedAddressService;
 use App\Services\Cart\CartService;
 use App\Services\Checkout\CheckoutCalculator;
 use App\Services\Checkout\CheckoutSnapshot;
@@ -36,6 +37,7 @@ class CheckoutController extends Controller
         private readonly CheckoutCalculator $calculator,
         private readonly OrderService $orders,
         private readonly PayseraCheckoutService $paysera,
+        private readonly SavedAddressService $addresses,
     ) {}
 
     public function create(Request $request): View|RedirectResponse
@@ -121,6 +123,10 @@ class CheckoutController extends Controller
             idempotencyKey: $token,
         );
 
+        if ($request->user() !== null && $request->boolean('save_address')) {
+            $this->addresses->createIfNew($request->user(), $request->shippingAddress()->toArray());
+        }
+
         $this->cart->clear();
         $this->forgetSnapshot($request, $token);
 
@@ -144,10 +150,11 @@ class CheckoutController extends Controller
 
     /**
      * A signed-in customer shouldn't have to retype their email/address on
-     * every order — pre-fill the form from their account email and their
-     * most recent order's shipping/billing address. Guests, and
-     * first-time customers with no prior order, get an empty form as
-     * before. `old()` in the view always takes priority over this, so
+     * every order — pre-fill the form from their account email, their
+     * default saved address (see App\Models\SavedAddress) if they have
+     * one, and their most recent order's address otherwise. Guests, and
+     * first-time customers with neither, get an empty form as before.
+     * `old()` in the view always takes priority over this, so
      * validation-error repopulation is unaffected.
      *
      * @return array<string, mixed>
@@ -160,13 +167,26 @@ class CheckoutController extends Controller
 
         $prefill = ['email' => $user->email];
 
+        $defaultAddress = $user->savedAddresses()->where('is_default', true)->first();
+        if ($defaultAddress !== null) {
+            foreach (['name', 'line1', 'line2', 'city', 'state', 'postal_code', 'country'] as $field) {
+                $prefill["shipping_{$field}"] = $defaultAddress->{$field};
+            }
+        }
+
         $lastOrder = Order::where('user_id', $user->id)->latest()->first();
         if ($lastOrder === null) {
             return $prefill;
         }
 
-        foreach (['name', 'line1', 'line2', 'city', 'state', 'postal_code', 'country'] as $field) {
-            $prefill["shipping_{$field}"] = $lastOrder->{"shipping_{$field}"};
+        // A saved default address takes priority for shipping; the last
+        // order is still the only source for billing (saved addresses
+        // don't track a shipping/billing distinction) and, absent a
+        // default address, for shipping too.
+        if ($defaultAddress === null) {
+            foreach (['name', 'line1', 'line2', 'city', 'state', 'postal_code', 'country'] as $field) {
+                $prefill["shipping_{$field}"] = $lastOrder->{"shipping_{$field}"};
+            }
         }
 
         $billingDifferent = $lastOrder->billing_name !== $lastOrder->shipping_name

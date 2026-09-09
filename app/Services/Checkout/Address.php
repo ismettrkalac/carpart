@@ -29,4 +29,24 @@ final readonly class Address
             "{$prefix}_country" => $this->country,
         ];
     }
+
+    /**
+     * Unprefixed shape, matching SavedAddress's own column names — for
+     * saving this address to the customer's account, see
+     * App\Services\Account\SavedAddressService.
+     *
+     * @return array<string, string|null>
+     */
+    public function toArray(): array
+    {
+        return [
+            'name' => $this->name,
+            'line1' => $this->line1,
+            'line2' => $this->line2,
+            'city' => $this->city,
+            'state' => $this->state,
+            'postal_code' => $this->postalCode,
+            'country' => $this->country,
+        ];
+    }
 }
