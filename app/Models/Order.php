@@ -28,8 +28,8 @@ use Illuminate\Support\Str;
     'subtotal_cents', 'shipping_cents', 'tax_cents', 'total_cents', 'currency',
     'idempotency_key',
     // Deliberately NOT fillable: payment_status, fulfillment_status,
-    // payment_provider, payment_reference. Those only ever change through
-    // App\Services\Orders\OrderFulfillmentService or
+    // payment_provider, payment_reference, payment_id. Those only ever
+    // change through App\Services\Orders\OrderFulfillmentService or
     // App\Services\Payments\PayseraCheckoutService, never via mass
     // assignment/a raw form save.
     'carrier', 'tracking_number', 'tracking_url',

@@ -6,6 +6,7 @@ use App\Enums\OrderActorType;
 use App\Enums\OrderStatusType;
 use App\Enums\PaymentStatus;
 use App\Mail\OrderPaymentConfirmedMail;
+use App\Mail\OrderRefundedMail;
 use App\Models\Order;
 use App\Services\Inventory\StockDeductionService;
 use Illuminate\Http\Client\ConnectionException;
@@ -21,17 +22,15 @@ use Illuminate\Support\Facades\Mail;
  * plain HTTP via Laravel's HTTP client, rather than an SDK — this project
  * only needs a handful of operations, and doing that over an
  * Http::fake()-able client keeps payments testable the same way
- * VinDecoderService is, with no new Composer dependency.
+ * VinDecoderService is, with no new Composer dependency. This is the
+ * only place that talks to Paysera — a second provider would be added
+ * here rather than scattered through controllers.
  *
  * Checkout is hosted/redirect-based: the customer enters their card on
  * Paysera's own page (the returned payment_URL), which never touches
  * this app. That keeps this integration in PCI DSS SAQ A (the lightest
  * self-assessment tier) — embedding a card-entry widget on our own page
  * instead would push it into the much larger SAQ A-EP.
- *
- * FUTURE: this is the only place that talks to Paysera. Refunds or a
- * second provider would be added here rather than scattered through
- * controllers.
  */
 class PayseraCheckoutService
 {
@@ -150,7 +149,17 @@ class PayseraCheckoutService
             return;
         }
 
-        $order = DB::transaction(function () use ($merchantOrderId, $orderData): ?Order {
+        $paymentId = $this->extractSettledPaymentId($orderData);
+
+        if ($paymentId === null) {
+            // Not fatal — payment confirmation above is decided from
+            // amount_paid/amount, independent of this. But without it,
+            // refund() has nothing to call later, so this is worth
+            // knowing about rather than failing silently.
+            Log::warning('Paysera webhook paid event had no settled payment id', ['merchant_order_id' => $merchantOrderId]);
+        }
+
+        $order = DB::transaction(function () use ($merchantOrderId, $orderData, $paymentId): ?Order {
             $order = Order::where('uuid', $merchantOrderId)->lockForUpdate()->first();
 
             if ($order === null) {
@@ -163,7 +172,10 @@ class PayseraCheckoutService
                 return null;
             }
 
-            $order->forceFill(['payment_status' => PaymentStatus::Paid])->save();
+            $order->forceFill([
+                'payment_status' => PaymentStatus::Paid,
+                'payment_id' => $paymentId,
+            ])->save();
 
             $order->statusHistories()->create([
                 'status_type' => OrderStatusType::Payment,
@@ -184,6 +196,104 @@ class PayseraCheckoutService
         if ($order !== null) {
             Mail::to($order->email)->queue(new OrderPaymentConfirmedMail($order));
         }
+    }
+
+    /**
+     * Refunds a paid order in full via Paysera's payment-executor API,
+     * then marks it Refunded locally. A stable idempotency key (this
+     * order's own uuid) means a retried request — a staff double-click,
+     * or this call timing out on our end after Paysera already processed
+     * it — can't double-refund at Paysera's end.
+     *
+     * NOTE: built against Paysera's documented refund endpoint
+     * (POST /payment-executor/integration/v1/payments/{paymentId}/refunds,
+     * https://developers.paysera.com/guides/checkout-modern/api-integration/refunds).
+     * Verify this against a real sandbox call before relying on it in
+     * production — the same caution as handleWebhookEvent()'s payload
+     * shape above, for the same reason: it hasn't been exercised against
+     * Paysera's actual API from inside this project.
+     *
+     * @throws PayseraApiException
+     */
+    public function refund(Order $order, OrderActorType $actorType, ?int $actorId, ?string $reason = null): void
+    {
+        if ($order->payment_status !== PaymentStatus::Paid) {
+            throw new PayseraApiException('Only a paid order can be refunded.');
+        }
+
+        if ($order->payment_id === null) {
+            throw new PayseraApiException('This order has no recorded Paysera payment id to refund.');
+        }
+
+        $token = $this->accessToken();
+
+        $this->post(
+            $token,
+            "/payment-executor/integration/v1/payments/{$order->payment_id}/refunds",
+            [
+                'amount' => $order->total_cents,
+                'currency' => $order->currency,
+                'reference' => $order->uuid,
+            ],
+            'refund the payment',
+            ['Idempotency-Key' => "{$order->uuid}:refund"],
+        );
+
+        $refunded = DB::transaction(function () use ($order, $actorType, $actorId, $reason): bool {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+
+            if ($locked === null || $locked->payment_status !== PaymentStatus::Paid) {
+                return false;
+            }
+
+            $locked->forceFill(['payment_status' => PaymentStatus::Refunded])->save();
+
+            $locked->statusHistories()->create([
+                'status_type' => OrderStatusType::Payment,
+                'from_status' => PaymentStatus::Paid->value,
+                'to_status' => PaymentStatus::Refunded->value,
+                'actor_type' => $actorType,
+                'actor_id' => $actorId,
+                'note' => $reason,
+            ]);
+
+            return true;
+        });
+
+        if ($refunded) {
+            Mail::to($order->email)->queue(new OrderRefundedMail($order));
+        }
+    }
+
+    /**
+     * The first settled payment's id out of a paid webhook's
+     * payment_links, which is what refund() needs — Paysera's refund
+     * endpoint operates on a payment id, not the order id already stored
+     * in payment_reference.
+     *
+     * @param  array<string, mixed>  $orderData
+     */
+    private function extractSettledPaymentId(array $orderData): ?string
+    {
+        $paymentLinks = $orderData['payment_links'] ?? null;
+        if (! is_array($paymentLinks)) {
+            return null;
+        }
+
+        foreach ($paymentLinks as $link) {
+            $payments = is_array($link) ? ($link['payments'] ?? null) : null;
+            if (! is_array($payments)) {
+                continue;
+            }
+
+            foreach ($payments as $payment) {
+                if (is_array($payment) && ($payment['status'] ?? null) === 'settled' && is_string($payment['id'] ?? null)) {
+                    return $payment['id'];
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -216,13 +326,14 @@ class PayseraCheckoutService
 
     /**
      * @param  array<string, mixed>  $body
+     * @param  array<string, string>  $headers
      *
      * @throws PayseraApiException
      */
-    private function post(string $token, string $path, array $body, string $action): Response
+    private function post(string $token, string $path, array $body, string $action, array $headers = []): Response
     {
         try {
-            $response = Http::withToken($token)->post(self::API_BASE.$path, $body);
+            $response = Http::withToken($token)->withHeaders($headers)->post(self::API_BASE.$path, $body);
         } catch (ConnectionException $exception) {
             throw new PayseraApiException("Could not reach Paysera to {$action}.", previous: $exception);
         }

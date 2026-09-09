@@ -13,6 +13,8 @@ use App\MoonShine\Resources\Order\Pages\OrderIndexPage;
 use App\Services\Orders\OrderFulfillmentService;
 use App\Services\Orders\OrderNoteService;
 use App\Services\Orders\OrderShipmentService;
+use App\Services\Payments\PayseraApiException;
+use App\Services\Payments\PayseraCheckoutService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use MoonShine\Contracts\Core\PageContract;
@@ -93,6 +95,29 @@ class OrderResource extends ModelResource
 
         return JsonResponse::make()
             ->toast('Order cancelled.', ToastType::SUCCESS)
+            ->redirect($this->getDetailPageUrl($this->getItem()->getKey()));
+    }
+
+    #[AsyncMethod]
+    public function refundOrder(Request $request, PayseraCheckoutService $paysera): JsonResponse
+    {
+        $note = $request->string('note')->trim()->value() ?: null;
+
+        try {
+            $paysera->refund(
+                order: $this->getItem(),
+                actorType: OrderActorType::Staff,
+                actorId: auth('moonshine')->id(),
+                reason: $note,
+            );
+        } catch (PayseraApiException $exception) {
+            return JsonResponse::make()
+                ->toast($exception->getMessage(), ToastType::ERROR)
+                ->redirect($this->getDetailPageUrl($this->getItem()->getKey()));
+        }
+
+        return JsonResponse::make()
+            ->toast('Order refunded.', ToastType::SUCCESS)
             ->redirect($this->getDetailPageUrl($this->getItem()->getKey()));
     }
 

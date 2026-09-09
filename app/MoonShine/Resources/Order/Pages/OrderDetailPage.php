@@ -82,6 +82,15 @@ class OrderDetailPage extends DetailPage
                     fields: [Textarea::make('Reason (optional)', 'note')],
                 ),
 
+            ActionButton::make('Refund')
+                ->method('refundOrder', params: fn (Order $order) => ['resourceItem' => $order->getKey()])
+                ->canSee(fn (Order $order) => $order->payment_status === PaymentStatus::Paid)
+                ->withConfirm(
+                    title: 'Refund this order?',
+                    content: 'Refunds the full amount via Paysera and cannot be undone.',
+                    fields: [Textarea::make('Reason (optional)', 'note')],
+                ),
+
             ActionButton::make('Update Shipment')
                 ->method('updateShipment', params: fn (Order $order) => ['resourceItem' => $order->getKey()])
                 ->withConfirm(

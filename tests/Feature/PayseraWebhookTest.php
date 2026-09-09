@@ -44,6 +44,32 @@ class PayseraWebhookTest extends TestCase
         $this->assertSame('paid', $entry->to_status);
     }
 
+    public function test_a_fully_paid_order_event_captures_the_settled_payment_id(): void
+    {
+        Mail::fake();
+        $order = Order::factory()->create();
+        $order->forceFill(['payment_provider' => 'paysera', 'payment_reference' => 'paysera-order-payment-id'])->save();
+
+        $this->postSignedWebhook($this->orderEvent($order->uuid, 'paysera-order-payment-id', $order->total_cents, $order->total_cents, settledPaymentId: 'settled-payment-42'))
+            ->assertOk();
+
+        $this->assertSame('settled-payment-42', $order->fresh()->payment_id);
+    }
+
+    public function test_a_paid_event_without_a_settled_payment_still_marks_the_order_paid(): void
+    {
+        Mail::fake();
+        $order = Order::factory()->create();
+        $order->forceFill(['payment_provider' => 'paysera', 'payment_reference' => 'paysera-order-no-payment-id'])->save();
+
+        $this->postSignedWebhook($this->orderEvent($order->uuid, 'paysera-order-no-payment-id', $order->total_cents, $order->total_cents, settledPaymentId: null))
+            ->assertOk();
+
+        $order->refresh();
+        $this->assertSame(PaymentStatus::Paid, $order->payment_status);
+        $this->assertNull($order->payment_id);
+    }
+
     public function test_a_partially_paid_order_event_does_not_change_the_order(): void
     {
         $order = Order::factory()->create();
@@ -233,7 +259,7 @@ class PayseraWebhookTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function orderEvent(string $merchantOrderId, string $payseraOrderId, int $amount, int $amountPaid): array
+    private function orderEvent(string $merchantOrderId, string $payseraOrderId, int $amount, int $amountPaid, ?string $settledPaymentId = 'p-1'): array
     {
         return [
             'event' => ['name' => 'amount_paid_updated', 'type' => 'order'],
@@ -243,6 +269,14 @@ class PayseraWebhookTest extends TestCase
                 'amount' => $amount,
                 'amount_paid' => $amountPaid,
                 'currency' => 'USD',
+                'payment_links' => $settledPaymentId === null ? [] : [
+                    [
+                        'id' => 'link-1',
+                        'payments' => [
+                            ['id' => $settledPaymentId, 'method' => 'swedbank', 'status' => 'settled', 'payment_currency' => 'USD', 'payment_amount' => $amountPaid],
+                        ],
+                    ],
+                ],
             ],
         ];
     }

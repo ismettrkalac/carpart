@@ -4,6 +4,11 @@
             <div class="rounded-md bg-green-50 p-4 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
                 <p class="font-medium">Payment received. Thank you!</p>
             </div>
+        @elseif ($order->payment_status === \App\Enums\PaymentStatus::Refunded)
+            <div class="rounded-md bg-neutral-100 p-4 text-sm text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+                <p class="font-medium">This order was refunded.</p>
+                <p class="mt-1">The full amount was returned to your original payment method — allow a few business days for it to appear.</p>
+            </div>
         @elseif ($order->payment_status === \App\Enums\PaymentStatus::Failed)
             <div class="rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-950 dark:text-red-300">
                 <p class="font-medium">Payment failed.</p>
