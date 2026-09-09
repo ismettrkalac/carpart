@@ -28,7 +28,7 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('account.orders.index'));
+        return redirect()->intended(route('account.profile'));
     }
 
     public function destroy(): RedirectResponse

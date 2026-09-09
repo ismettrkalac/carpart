@@ -8,6 +8,7 @@ use App\Enums\PaymentStatus;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Order;
 use App\Models\Part;
+use App\Models\SavedAddress;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -204,6 +205,99 @@ class CheckoutTest extends TestCase
         $prefill = $response->viewData('prefill');
         $this->assertTrue($prefill['billing_different']);
         $this->assertSame('Jane Mechanic LLC', $prefill['billing_name']);
+    }
+
+    public function test_checkout_prefills_shipping_from_the_customers_default_saved_address(): void
+    {
+        $user = User::factory()->create();
+        // An older order's address must lose out to the saved default.
+        Order::factory()->create(['user_id' => $user->id, 'shipping_name' => 'Old Order Name']);
+        SavedAddress::factory()->for($user)->default()->create(['name' => 'Saved Default Name', 'city' => 'Saved City']);
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->actingAs($user)->get(route('checkout.create'));
+
+        $prefill = $response->viewData('prefill');
+        $this->assertSame('Saved Default Name', $prefill['shipping_name']);
+        $this->assertSame('Saved City', $prefill['shipping_city']);
+    }
+
+    public function test_checking_save_address_saves_the_shipping_address_to_the_customers_account(): void
+    {
+        $user = User::factory()->create();
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            ...$this->validCheckoutPayload($token),
+            'save_address' => '1',
+        ]);
+
+        $this->assertDatabaseHas('saved_addresses', [
+            'user_id' => $user->id,
+            'name' => 'Jane Mechanic',
+            'city' => 'Springfield',
+        ]);
+    }
+
+    public function test_leaving_save_address_unchecked_does_not_save_it(): void
+    {
+        $user = User::factory()->create();
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part);
+
+        $this->actingAs($user)->post(route('checkout.store'), $this->validCheckoutPayload($token));
+
+        $this->assertSame(0, SavedAddress::count());
+    }
+
+    public function test_save_address_is_ignored_for_guests(): void
+    {
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part);
+
+        $this->post(route('checkout.store'), [
+            ...$this->validCheckoutPayload($token),
+            'save_address' => '1',
+        ]);
+
+        $this->assertSame(0, SavedAddress::count());
+    }
+
+    public function test_the_save_address_checkbox_is_checked_by_default(): void
+    {
+        $user = User::factory()->create();
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $this->post(route('cart.items.store', $part), ['quantity' => 1]);
+
+        $response = $this->actingAs($user)->get(route('checkout.create'));
+
+        $response->assertOk();
+        $response->assertSee('name="save_address" value="1" checked', false);
+    }
+
+    public function test_checking_out_with_an_address_already_saved_does_not_duplicate_it(): void
+    {
+        $user = User::factory()->create();
+        SavedAddress::factory()->for($user)->create([
+            'name' => 'Jane Mechanic',
+            'line1' => '123 Garage Row',
+            'line2' => null,
+            'city' => 'Springfield',
+            'state' => 'IL',
+            'postal_code' => '62704',
+            'country' => 'US',
+        ]);
+        $part = Part::factory()->create(['stock_quantity' => 10, 'status' => PartStatus::Active]);
+        $token = $this->addToCartAndStartCheckout($part);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            ...$this->validCheckoutPayload($token),
+            'save_address' => '1',
+        ]);
+
+        $this->assertSame(1, SavedAddress::where('user_id', $user->id)->count());
     }
 
     public function test_prefilled_fields_appear_in_the_rendered_form(): void

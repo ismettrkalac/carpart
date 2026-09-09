@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Number;
+use Laravel\Scout\Searchable;
 
 #[Fillable([
     'manufacturer_id',
@@ -29,7 +30,7 @@ use Illuminate\Support\Number;
 class Part extends Model
 {
     /** @use HasFactory<PartFactory> */
-    use HasFactory;
+    use HasFactory, Searchable;
 
     /**
      * @return array<string, string>
@@ -145,19 +146,35 @@ class Part extends Model
     }
 
     /**
-     * @param  Builder<Part>  $query
-     * @return Builder<Part>
+     * Only Active parts are ever indexed for search — a draft or
+     * discontinued part simply never reaches Meilisearch, so it can't
+     * turn up in results no matter what a shopper searches for. See
+     * PartController for the belt-and-suspenders status filter applied
+     * at query time too.
      */
-    public function scopeSearch(Builder $query, ?string $term): Builder
+    public function shouldBeSearchable(): bool
     {
-        if ($term === null || trim($term) === '') {
-            return $query;
-        }
+        return $this->status === PartStatus::Active;
+    }
 
-        return $query->where(function (Builder $query) use ($term): void {
-            $query->where('name', 'like', "%{$term}%")
-                ->orWhere('sku', 'like', "%{$term}%")
-                ->orWhere('description', 'like', "%{$term}%");
-        });
+    /**
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'sku' => $this->sku,
+            'name' => $this->name,
+            'description' => $this->description,
+            // Nullsafe: some engines (e.g. Scout's database driver) call
+            // this on an empty template instance just to read field names,
+            // where status is never actually set.
+            'status' => $this->status?->value,
+            'category_id' => $this->category_id,
+            'manufacturer_id' => $this->manufacturer_id,
+            'base_price_cents' => $this->base_price_cents,
+            'created_at' => $this->created_at?->timestamp,
+        ];
     }
 }

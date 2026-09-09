@@ -29,6 +29,6 @@ class RegisterController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('account.orders.index')->with('status', 'Welcome! Your account has been created.');
+        return redirect()->route('account.profile')->with('status', 'Welcome! Your account has been created.');
     }
 }

@@ -1,6 +1,7 @@
 <x-layout title="Your Orders">
     <div class="mx-auto max-w-4xl px-6 py-10">
-        <h1 class="text-2xl font-semibold">Your Orders</h1>
+        <a href="{{ route('account.profile') }}" class="text-sm text-neutral-500 hover:underline">&larr; Profile</a>
+        <h1 class="mt-2 text-2xl font-semibold">Your Orders</h1>
 
         @if ($orders->isEmpty())
             <div class="mt-16 text-center text-neutral-500">

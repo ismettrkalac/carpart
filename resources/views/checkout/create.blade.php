@@ -81,6 +81,13 @@
                             @error('shipping_country')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
                         </div>
                     </div>
+
+                    @auth
+                        <label class="mt-4 flex items-center gap-2 text-sm font-medium">
+                            <input type="checkbox" name="save_address" value="1" {{ old('save_address', true) ? 'checked' : '' }} class="rounded border-neutral-300">
+                            Save this address to my account
+                        </label>
+                    @endauth
                 </section>
 
                 <section>

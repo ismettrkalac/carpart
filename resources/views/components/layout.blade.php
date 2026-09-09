@@ -33,7 +33,7 @@
                             <span x-show="cartCount > 0" x-cloak x-text="cartCount" class="flex size-5 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900"></span>
                         </a>
                         @auth
-                            <a href="{{ route('account.orders.index') }}" class="hover:text-neutral-500 {{ request()->routeIs('account.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Your Orders</a>
+                            <a href="{{ route('account.profile') }}" class="hover:text-neutral-500 {{ request()->routeIs('account.*') ? 'text-neutral-900 dark:text-white' : 'text-neutral-600 dark:text-neutral-400' }}">Profile</a>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <button type="submit" class="text-neutral-600 hover:text-neutral-500 dark:text-neutral-400">Sign out</button>
@@ -64,7 +64,7 @@
                         Cart<template x-if="cartCount > 0"><span x-text="' (' + cartCount + ')'"></span></template>
                     </a>
                     @auth
-                        <a href="{{ route('account.orders.index') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Your Orders</a>
+                        <a href="{{ route('account.profile') }}" class="rounded-md px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900">Profile</a>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <button type="submit" class="w-full rounded-md px-2 py-2 text-left hover:bg-neutral-100 dark:hover:bg-neutral-900">Sign out</button>

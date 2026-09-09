@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Account\AccountOrderController;
+use App\Http\Controllers\Account\ProfileController;
+use App\Http\Controllers\Account\SavedAddressController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -58,6 +60,17 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->prefix('account')->name('account.')->group(function () {
+    Route::get('/', [ProfileController::class, 'show'])->name('profile');
+
     Route::get('/orders', [AccountOrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order:uuid}', [AccountOrderController::class, 'show'])->name('orders.show');
+
+    Route::prefix('addresses')->name('addresses.')->group(function () {
+        Route::get('/', [SavedAddressController::class, 'index'])->name('index');
+        Route::get('/create', [SavedAddressController::class, 'create'])->name('create');
+        Route::post('/', [SavedAddressController::class, 'store'])->name('store');
+        Route::get('/{address}/edit', [SavedAddressController::class, 'edit'])->name('edit');
+        Route::put('/{address}', [SavedAddressController::class, 'update'])->name('update');
+        Route::delete('/{address}', [SavedAddressController::class, 'destroy'])->name('destroy');
+    });
 });

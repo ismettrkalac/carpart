@@ -8,7 +8,9 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.17",
+        "laravel/scout": "^11.7",
         "laravel/tinker": "^3.0",
+        "meilisearch/meilisearch-php": "^1.17",
         "moonshine/moonshine": "^4.19"
     },
     "require-dev": {
